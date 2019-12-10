@@ -85,7 +85,7 @@ int uthread_create(uthread_executor_t *executor, void (*func)(void *),
 
 void uthread_exec_join(uthread_executor_t *executor) {
   pexec = executor;
-  for (int i = 0;; i == executor->thread_count ? i = 0 : i++) {
+  for (int i = 0;; i == executor->thread_count - 1 ? i = 0 : i++) {
     uthread_t *thread = &executor->threads[i];
     if (thread->state == STOPPED || thread->state == ABORTED) {
       if (executor->stopped_count == executor->thread_count) {
