@@ -32,13 +32,11 @@ typedef enum uthread_state {
   ABORTED
 } uthread_state;
 
-uthread_executor_t *uthread_exec_create(unsigned long max_thread_count,
-                                        void *(*alloctor)(size_t));
+uthread_executor_t *uthread_exec_create(unsigned long max_thread_count);
 int uthread_create(uthread_executor_t *executor, void (*func)(void *),
                    void *func_arg);
 void uthread_exec_join(uthread_executor_t *executor);
-void uthread_exec_destroy(uthread_executor_t *executor,
-                          void (*dealloctor)(void *));
+void uthread_exec_destroy(uthread_executor_t *executor);
 
 void uthread_yield();
 void uthread_exit();

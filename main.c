@@ -2,7 +2,6 @@
 #ifndef haha
 #define DEBUG
 #include "uthread_sysv.c"
-#include <memory.h>
 #include <stdio.h>
 
 void co1() {
@@ -21,7 +20,7 @@ void co2() {
 
 int main(int argc, char **args) {
   printf("go\n");
-  uthread_executor_t *exec = uthread_exec_create(2, malloc);
+  uthread_executor_t *exec = uthread_exec_create(2);
   if (!exec)
     abort();
   if (!uthread_create(exec, co1, 0))
@@ -29,6 +28,7 @@ int main(int argc, char **args) {
   if (!uthread_create(exec, co2, 0))
     abort();
   uthread_exec_join(exec);
+  uthread_exec_destroy(exec);
   printf("ok\n");
   return 0;
 }
