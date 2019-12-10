@@ -1,5 +1,6 @@
 *.o
 *.dll
+build/
 
 # User-specific files
 *.rsuser
