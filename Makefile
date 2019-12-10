@@ -5,7 +5,7 @@ all:: main
 
 main: main.c
 		mkdir -p $(OUTPUT)
-		cc $(CFLAGS) -c main.c -g -o $(OUTPUT)/main.o
+		cc $(CFLAGS) -c main.c -o $(OUTPUT)/main.o -g
 		cc $(OUTPUT)/main.o -o $(OUTPUT)/main.dll
 
 clean:

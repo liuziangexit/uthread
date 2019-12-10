@@ -13,7 +13,7 @@
  * the License.
  */
 
-// prevent darwin kernel
+// prevent compile under darwin kernel
 #ifdef __APPLE__
 //#error "NO DARWIN"
 #endif
@@ -32,7 +32,7 @@ extension)*/
 
 struct uthread_executor_t {
   uthread_t *threads;
-  uthread_t *running;
+  size_t current; // index of the thread that are currently running
   ucontext_t ctlr_ctx;
   size_t thread_count;
   size_t max_count;
@@ -46,8 +46,11 @@ struct uthread_t {
 };
 
 static _Thread_local uthread_executor_t *pexec;
-int uthread_impl_resume(uthread_t *thread);
-void uthread_impl_mark_aborted(uthread_t *thread);
+int uthread_impl_resume(size_t tex);
+void uthread_impl_mark_aborted(size_t thread_index);
+
+#define THREAD_AT(i) (pexec->threads + i)
+#define CURRENT_THREAD THREAD_AT(pexec->current)
 
 uthread_executor_t *uthread_exec_create(unsigned int max_thread_count) {
   uthread_executor_t *exec = malloc(sizeof(uthread_executor_t) +
@@ -55,7 +58,7 @@ uthread_executor_t *uthread_exec_create(unsigned int max_thread_count) {
   if (exec == 0)
     return 0;
   exec->threads = (uthread_t *)exec + 1;
-  exec->running = 0;
+  exec->current = 0;
   exec->thread_count = 0;
   exec->max_count = max_thread_count;
   exec->stopped_count = 0;
@@ -91,8 +94,8 @@ void uthread_exec_join(uthread_executor_t *executor) {
         continue;
     }
     if (thread->state == CREATED || thread->state == YIELDED) {
-      if (!uthread_impl_resume(thread))
-        uthread_impl_mark_aborted(thread);
+      if (!uthread_impl_resume(i))
+        uthread_impl_mark_aborted(i);
       continue;
     }
     abort();
@@ -102,23 +105,24 @@ void uthread_exec_join(uthread_executor_t *executor) {
 void uthread_exec_destroy(uthread_executor_t *exec) { free(exec); }
 
 void uthread_yield() {
-  pexec->running->state = YIELDED;
-  if (swapcontext(&pexec->running->ctx, &pexec->ctlr_ctx) != 0) {
-    uthread_impl_mark_aborted(pexec->running);
+  CURRENT_THREAD->state = YIELDED;
+  if (swapcontext(&CURRENT_THREAD->ctx, &pexec->ctlr_ctx) != 0) {
+    uthread_impl_mark_aborted(pexec->current);
     abort();
   }
 }
 
 void uthread_exit() {
-  pexec->running->state = STOPPED;
+  CURRENT_THREAD->state = STOPPED;
   pexec->stopped_count++;
   setcontext(&pexec->ctlr_ctx);
 }
 
-int uthread_impl_resume(uthread_t *thread) {
+int uthread_impl_resume(size_t thread_index) {
+  uthread_t *thread = THREAD_AT(thread_index);
   uthread_state prev_state = thread->state;
   thread->state = RUNNING;
-  pexec->running = thread;
+  pexec->current = thread_index;
   if (prev_state == CREATED || prev_state == YIELDED) {
     if (swapcontext(&pexec->ctlr_ctx, &thread->ctx) != 0)
       return 0;
@@ -128,7 +132,10 @@ int uthread_impl_resume(uthread_t *thread) {
   abort();
 }
 
-void uthread_impl_mark_aborted(uthread_t *thread) {
-  thread->state = ABORTED;
+void uthread_impl_mark_aborted(size_t thread_index) {
+  THREAD_AT(thread_index)->state = ABORTED;
   pexec->stopped_count++;
 }
+#undef THREAD_AT
+#undef CURRENTTHREAD
+#undef _XOPEN_SOURCE

@@ -19,8 +19,8 @@ void co(void *arg) {
 
 int main(int argc, char **args) {
   printf("go\n------------\n");
-  static const size_t CO_COUNT = 60000;
-  static const size_t CO_CAP = 60000;
+  static const size_t CO_COUNT = 80000;
+  static const size_t CO_CAP = 80000;
   assert(CO_CAP >= CO_COUNT);
   uthread_executor_t *exec = uthread_exec_create(CO_CAP);
   if (!exec) {
