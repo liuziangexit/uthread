@@ -1,0 +1,7 @@
+INFO: loading config from /ss.json
+2019-12-10 15:29:41 INFO     loading libcrypto from libcrypto.so.10
+2019-12-10 15:29:41 INFO     starting local at 127.0.0.1:10800
+2019-12-10 15:30:27 INFO     connecting www.twitter.com:443 from 127.0.0.1:42042
+2019-12-10 15:31:15 INFO     connecting debuginfo.centos.org:80 from 127.0.0.1:42048
+2019-12-10 15:31:15 INFO     connecting debuginfo.centos.org:80 from 127.0.0.1:42046
+2019-12-10 15:31:23 INFO     connecting mirrors.aliyun.com:80 from 127.0.0.1:42054

@@ -5,8 +5,8 @@ all:: main
 
 main: main.c
 		mkdir -p $(OUTPUT)
-		cc $(CFLAGS) -c main.c -g -o $(OUTPUT)/main.o
+		cc $(CFLAGS) -c main.c -g -o $(OUTPUT)/main.o -Wno-deprecated-declarations
 		cc $(OUTPUT)/main.o -o $(OUTPUT)/main.dll
 
 clean:
-	rm -rf $(OUTPUT)/
+	rm -rf $(OUTPUT)

@@ -28,25 +28,20 @@ typedef enum uthread_state {
   WAITING_IO,     // waiting for an IO operation
   YIELDED,        // uthread_yield has been called
   RUNNING,
-  STOPPED
+  STOPPED,
+  ABORTED
 } uthread_state;
 
-int uthread_exec_create(uthread_executor_t *executor,
-                        unsigned long max_thread_count,
-                        void *(*alloctor)(unsigned int));
+uthread_executor_t *uthread_exec_create(unsigned long max_thread_count,
+                                        void *(*alloctor)(size_t));
 int uthread_create(uthread_executor_t *executor, void (*func)(void *),
                    void *func_arg);
-int uthread_exec_join(uthread_executor_t *executor);
+void uthread_exec_join(uthread_executor_t *executor);
 void uthread_exec_destroy(uthread_executor_t *executor,
                           void (*dealloctor)(void *));
 
-// internal usage
-void uthread_resume(uthread_executor_t *executor, uthread_t *thread);
-
-// call from uthread
 void uthread_yield();
 void uthread_exit();
-uthread_executor_t *uthread_get_exec();
 
 #ifdef __cplusplus
 }
