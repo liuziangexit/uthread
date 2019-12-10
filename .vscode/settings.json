@@ -2,6 +2,6 @@
     "files.associations": {
         "stdio.h": "c",
         "ucontext.h": "c",
-        "vector": "c"
+        "string.h": "c"
     }
 }

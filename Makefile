@@ -1,11 +1,11 @@
-CFLAGS = -O0 -std=c11
+CFLAGS = -Ofast -std=c11 -Wall -Wno-deprecated-declarations
 OUTPUT = build
 
 all:: main
 
 main: main.c
 		mkdir -p $(OUTPUT)
-		cc $(CFLAGS) -c main.c -g -o $(OUTPUT)/main.o -Wno-deprecated-declarations
+		cc $(CFLAGS) -c main.c -g -o $(OUTPUT)/main.o
 		cc $(OUTPUT)/main.o -o $(OUTPUT)/main.dll
 
 clean:
