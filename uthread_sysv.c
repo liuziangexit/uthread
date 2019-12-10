@@ -136,6 +136,7 @@ void uthread_impl_mark_aborted(size_t thread_index) {
   THREAD_AT(thread_index)->state = ABORTED;
   pexec->stopped_count++;
 }
+
 #undef THREAD_AT
 #undef CURRENTTHREAD
 #undef _XOPEN_SOURCE
