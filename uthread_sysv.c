@@ -15,7 +15,7 @@
 
 // prevent compile under darwin kernel
 #ifdef __APPLE__
-//#error "NO DARWIN"
+#error "NO DARWIN"
 #endif
 
 /* Defining this macro to 600 causes header files to expose definitions for
