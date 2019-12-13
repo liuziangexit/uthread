@@ -36,8 +36,8 @@ typedef enum uthread_state {
 uthread_executor_t *uthread_exec_create(unsigned int max_thread_count);
 
 // create an uthread under specific executor
-int uthread_create(uthread_executor_t *executor, void (*func)(void *),
-                   void *func_arg);
+int uthread_create(uthread_executor_t *executor,
+                   void (*func)(void *handle, void *), void *func_arg);
 
 // causes uthreads under the executor to be executed
 // the call will be blocked until all the uthreads exit or abort
@@ -48,10 +48,10 @@ void uthread_exec_destroy(uthread_executor_t *executor);
 
 // causes the calling uthread to yield execution to another uthread that is
 // ready to run on the current executor
-void uthread_yield();
+void uthread_yield(void *handle);
 
 // causes the calling uthread to exit
-void uthread_exit();
+void uthread_exit(void *handle);
 
 #ifdef __cplusplus
 }
