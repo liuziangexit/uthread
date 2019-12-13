@@ -25,7 +25,11 @@ extension)*/
 
 #include "uthread.h"
 #include <assert.h>
+#include <limits.h> //for CHAR_BIT
+#include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h> //for size_t
+#include <stdint.h> //for uintptr_t
 #include <stdlib.h> //for abort/malloc
 #include <string.h> //for memset
 #include <ucontext.h>
@@ -40,14 +44,17 @@ struct uthread_executor_t {
 };
 
 struct uthread_t {
+  void (*func)(void *);
+  void *func_arg;
   uthread_state state;
   ucontext_t ctx;
   unsigned char stack[1024 * 4]; // 4kb
 };
 
 static _Thread_local uthread_executor_t *pexec;
-int uthread_impl_resume(size_t tex);
-void uthread_impl_mark_aborted(size_t thread_index);
+static int uthread_impl_resume(size_t);
+static void uthread_impl_mark_aborted(size_t);
+static void uthread_impl_functor_wrapper(uint32_t, uint32_t);
 
 #define THREAD_AT(i) (pexec->threads + i)
 #define CURRENT_THREAD THREAD_AT(pexec->current)
@@ -65,12 +72,21 @@ uthread_executor_t *uthread_exec_create(unsigned int max_thread_count) {
   return exec;
 }
 
+_Static_assert(CHAR_BIT == 8 // make sure a byte == 8 bit
+                   && ((sizeof(void *) == 4 &&
+                        sizeof(int) == sizeof(void *)) // 32bit
+                       || (sizeof(void *) == 8 &&
+                           sizeof(void *) / sizeof(int) == 2)), // 64bit
+               "currently we only support 32bit and 64bit platforms");
+
 int uthread_create(uthread_executor_t *executor, void (*func)(void *),
                    void *func_arg) {
   if (executor->thread_count == executor->max_count)
     return 0;
   uthread_t *new_thread = &executor->threads[executor->thread_count];
   new_thread->state = CREATED;
+  new_thread->func = func;
+  new_thread->func_arg = func_arg;
   // create context
   if (getcontext(&new_thread->ctx) != 0)
     return 0;
@@ -78,7 +94,9 @@ int uthread_create(uthread_executor_t *executor, void (*func)(void *),
   new_thread->ctx.uc_stack.ss_sp = &new_thread->stack;
   new_thread->ctx.uc_stack.ss_size = sizeof(new_thread->stack);
   // ctx will begin with func
-  makecontext(&new_thread->ctx, (void (*)())func, 1, func_arg);
+  makecontext(&new_thread->ctx, (void (*)())uthread_impl_functor_wrapper, 2,
+              (uint32_t)(uintptr_t)new_thread,
+              (uint32_t)((uintptr_t)new_thread >> 32));
   executor->thread_count++;
   return 1;
 }
@@ -118,7 +136,7 @@ void uthread_exit() {
   setcontext(&pexec->ctlr_ctx);
 }
 
-int uthread_impl_resume(size_t thread_index) {
+static int uthread_impl_resume(size_t thread_index) {
   uthread_t *thread = THREAD_AT(thread_index);
   uthread_state prev_state = thread->state;
   thread->state = RUNNING;
@@ -132,7 +150,7 @@ int uthread_impl_resume(size_t thread_index) {
   abort();
 }
 
-void uthread_impl_mark_aborted(size_t thread_index) {
+static void uthread_impl_mark_aborted(size_t thread_index) {
   THREAD_AT(thread_index)->state = ABORTED;
   pexec->stopped_count++;
 }
@@ -140,3 +158,8 @@ void uthread_impl_mark_aborted(size_t thread_index) {
 #undef THREAD_AT
 #undef CURRENTTHREAD
 #undef _XOPEN_SOURCE
+
+static void uthread_impl_functor_wrapper(uint32_t low, uint32_t high) {
+  uthread_t *thread = (uthread_t *)((uintptr_t)low | ((uintptr_t)high << 32));
+  thread->func(thread->func_arg);
+}
