@@ -28,7 +28,6 @@ extension)*/
 #include <limits.h> //for CHAR_BIT
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stddef.h> //for size_t
 #include <stdint.h> //for uintptr_t
 #include <stdlib.h> //for abort/malloc
 #include <string.h> //for memset
@@ -36,10 +35,11 @@ extension)*/
 
 struct uthread_executor_t {
   uthread_t *threads;
-  ucontext_t ctlr_ctx;
-  size_t thread_count;
-  size_t max_count;
-  size_t stopped_count;
+  ucontext_t join_ctx;
+  size_t current;
+  size_t count;
+  size_t capacity;
+  size_t stopped;
 };
 
 struct uthread_t {
@@ -51,19 +51,19 @@ struct uthread_t {
   unsigned char stack[1024 * 4]; // 4kb
 };
 
-static int uthread_impl_resume(uthread_t *);
+static uthread_t *uthread_impl_update_next(uthread_t *current_thread);
 static void uthread_impl_mark_aborted(uthread_t *);
 static void uthread_impl_functor_wrapper(uint32_t, uint32_t);
 
-uthread_executor_t *uthread_exec_create(unsigned int max_thread_count) {
-  uthread_executor_t *exec = malloc(sizeof(uthread_executor_t) +
-                                    sizeof(uthread_t) * (max_thread_count + 1));
+uthread_executor_t *uthread_exec_create(size_t capacity) {
+  uthread_executor_t *exec =
+      malloc(sizeof(uthread_executor_t) + sizeof(uthread_t) * (capacity + 1));
   if (exec == 0)
     return 0;
   exec->threads = (uthread_t *)exec + 1;
-  exec->thread_count = 0;
-  exec->max_count = max_thread_count;
-  exec->stopped_count = 0;
+  exec->count = 0;
+  exec->capacity = capacity;
+  exec->stopped = 0;
   return exec;
 }
 
@@ -74,14 +74,14 @@ _Static_assert(CHAR_BIT == 8 // make sure a byte == 8 bit
                            sizeof(void *) / sizeof(int) == 2)), // 64bit
                "currently we only support 32bit and 64bit platforms");
 
-int uthread_create(uthread_executor_t *executor, void (*func)(void *, void *),
+int uthread_create(uthread_executor_t *exec, void (*func)(void *, void *),
                    void *func_arg) {
-  if (executor->thread_count == executor->max_count)
+  if (exec->capacity == exec->count)
     return 0;
-  uthread_t *new_thread = &executor->threads[executor->thread_count];
+  uthread_t *new_thread = &exec->threads[exec->count];
   new_thread->func = func;
   new_thread->func_arg = func_arg;
-  new_thread->pexec = executor;
+  new_thread->pexec = exec;
   new_thread->state = CREATED;
   // create context
   if (getcontext(&new_thread->ctx) != 0)
@@ -93,60 +93,58 @@ int uthread_create(uthread_executor_t *executor, void (*func)(void *, void *),
   makecontext(&new_thread->ctx, (void (*)())uthread_impl_functor_wrapper, 2,
               (uint32_t)(uintptr_t)new_thread,
               (uint32_t)((uintptr_t)new_thread >> 32));
-  executor->thread_count++;
+  exec->count++;
   return 1;
 }
 
-void uthread_exec_join(uthread_executor_t *executor) {
-  for (size_t i = 0;; i = (i + 1) % executor->thread_count) {
-    uthread_t *thread = &executor->threads[i];
-    if (thread->state == STOPPED || thread->state == ABORTED) {
-      if (executor->stopped_count == executor->thread_count)
-        return;
-      else
-        continue;
-    }
-    if (thread->state == CREATED || thread->state == YIELDED) {
-      if (!uthread_impl_resume(&executor->threads[i]))
-        uthread_impl_mark_aborted(&executor->threads[i]);
-      continue;
-    }
-    abort();
+void uthread_exec_join(uthread_executor_t *exec) {
+  if (exec->count > 0) {
+    exec->current = 0;
+    exec->threads[0].state = RUNNING;
+    swapcontext(&exec->join_ctx, &exec->threads[0].ctx);
   }
 }
 
 void uthread_exec_destroy(uthread_executor_t *exec) { free(exec); }
 
 void uthread_yield(void *handle) {
-  ((uthread_t *)handle)->state = YIELDED;
-  if (swapcontext(&((uthread_t *)handle)->ctx,
-                  &((uthread_t *)handle)->pexec->ctlr_ctx) != 0) {
-    uthread_impl_mark_aborted((uthread_t *)handle);
+  uthread_t *current_thread = (uthread_t *)handle;
+  assert(current_thread->pexec->count - current_thread->pexec->stopped != 0);
+  if (current_thread->pexec->count - current_thread->pexec->stopped == 1)
+    return;
+
+  current_thread->state = YIELDED;
+  uthread_t *next = uthread_impl_update_next(current_thread);
+  next->state = RUNNING;
+  if (swapcontext(&current_thread->ctx, &next->ctx) != 0) {
+    uthread_impl_mark_aborted(current_thread);
     abort();
   }
 }
 
 void uthread_exit(void *handle) {
-  ((uthread_t *)handle)->state = STOPPED;
-  ((uthread_t *)handle)->pexec->stopped_count++;
-  setcontext(&((uthread_t *)handle)->pexec->ctlr_ctx);
+  uthread_t *current_thread = (uthread_t *)handle;
+  current_thread->state = STOPPED;
+  current_thread->pexec->stopped++;
+
+  if (current_thread->pexec->count == current_thread->pexec->stopped) {
+    setcontext(&current_thread->pexec->join_ctx);
+  } else {
+    uthread_t *next = uthread_impl_update_next(current_thread);
+    next->state = RUNNING;
+    setcontext(&next->ctx);
+  }
 }
 
-static int uthread_impl_resume(uthread_t *handle) {
-  uthread_state prev_state = handle->state;
-  handle->state = RUNNING;
-  if (prev_state == CREATED || prev_state == YIELDED) {
-    if (swapcontext(&handle->pexec->ctlr_ctx, &handle->ctx) != 0)
-      return 0;
-    else
-      return 1;
-  }
-  abort();
+static uthread_t *uthread_impl_update_next(uthread_t *current_thread) {
+  size_t *current_index = &current_thread->pexec->current;
+  *current_index = (*current_index + 1) % current_thread->pexec->count;
+  return &current_thread->pexec->threads[*current_index];
 }
 
 static void uthread_impl_mark_aborted(uthread_t *handle) {
   handle->state = ABORTED;
-  handle->pexec->stopped_count++;
+  handle->pexec->stopped++;
 }
 
 static void uthread_impl_functor_wrapper(uint32_t low, uint32_t high) {

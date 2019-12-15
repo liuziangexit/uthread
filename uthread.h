@@ -15,6 +15,7 @@
 
 #ifndef __UTHREAD_H__
 #define __UTHREAD_H__
+#include <stddef.h> //for size_t
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,18 +34,18 @@ typedef enum uthread_state {
 } uthread_state;
 
 // create an executor
-uthread_executor_t *uthread_exec_create(unsigned int max_thread_count);
+uthread_executor_t *uthread_exec_create(size_t capacity);
 
 // create an uthread under specific executor
-int uthread_create(uthread_executor_t *executor,
-                   void (*func)(void *handle, void *), void *func_arg);
+int uthread_create(uthread_executor_t *exec, void (*func)(void *handle, void *),
+                   void *func_arg);
 
 // causes uthreads under the executor to be executed
 // the call will be blocked until all the uthreads exit or abort
-void uthread_exec_join(uthread_executor_t *executor);
+void uthread_exec_join(uthread_executor_t *exec);
 
 // destory specific executor
-void uthread_exec_destroy(uthread_executor_t *executor);
+void uthread_exec_destroy(uthread_executor_t *exec);
 
 // causes the calling uthread to yield execution to another uthread that is
 // ready to run on the current executor

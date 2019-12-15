@@ -3,32 +3,40 @@
 #include <assert.h>
 #include <stdio.h>
 
+//#define NO_PRINT
+
 int count = 0;
 
 void co(void *handle, void *arg) {
   count++;
+#ifndef NO_PRINT
   if (sizeof(size_t) == 4)
     printf("%d go\n", *(size_t *)arg);
   else
     printf("%ld go\n", *(size_t *)arg);
+#endif
   uthread_yield(handle);
   count++;
+#ifndef NO_PRINT
   if (sizeof(size_t) == 4)
     printf("%d mid\n", *(size_t *)arg);
   else
     printf("%ld mid\n", *(size_t *)arg);
+#endif
   uthread_yield(handle);
   count++;
+#ifndef NO_PRINT
   if (sizeof(size_t) == 4)
     printf("%d ok\n", *(size_t *)arg);
   else
     printf("%ld ok\n", *(size_t *)arg);
+#endif
   uthread_exit(handle);
 }
 
 int main(int argc, char **args) {
   printf("go\n------------\n");
-  static const size_t CO_COUNT = 8;
+  static const size_t CO_COUNT = 5;
   static const size_t CO_CAP = 80000;
   assert(CO_CAP >= CO_COUNT);
   uthread_executor_t *exec = uthread_exec_create(CO_CAP);
