@@ -60,7 +60,10 @@ uthread_executor_t *uthread_exec_create(size_t capacity) {
       malloc(sizeof(uthread_executor_t) + sizeof(uthread_t) * (capacity + 1));
   if (exec == 0)
     return 0;
-  exec->threads = (uthread_t *)exec + 1;
+  _Static_assert(_Alignof(uthread_executor_t) == _Alignof(uthread_t),
+                 "the alignment requirement of uthread_executor_t and "
+                 "uthread_t can not be matched");
+  exec->threads = (uthread_executor_t *)exec + 1;
   exec->count = 0;
   exec->capacity = capacity;
   exec->stopped = 0;
