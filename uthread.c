@@ -17,8 +17,8 @@
 
 #ifndef _WIN32
 // assuming under System V
-#include "uthread_sysv.c"
+#include "sysv/uthread_impl.c"
 #else
 // under Windows NT
-#include "uthread_nt.c"
+#include "nt/uthread_impl.c"
 #endif

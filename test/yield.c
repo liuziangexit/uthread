@@ -1,7 +1,8 @@
 #define DEBUG
-#include "uthread.c"
+#include "../uthread.h"
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 //#define NO_PRINT
 

@@ -23,7 +23,7 @@ SUSv3 (UNIX 03; i.e., the POSIX.1-2001 base specification plus the XSI
 extension)*/
 #define _XOPEN_SOURCE 600
 
-#include "uthread.h"
+#include "../uthread.h"
 #include <assert.h>
 #include <limits.h> //for CHAR_BIT
 #include <stdarg.h>
@@ -63,7 +63,7 @@ uthread_executor_t *uthread_exec_create(size_t capacity) {
   _Static_assert(_Alignof(uthread_executor_t) == _Alignof(uthread_t),
                  "the alignment requirement of uthread_executor_t and "
                  "uthread_t can not be matched");
-  exec->threads = (uthread_executor_t *)exec + 1;
+  exec->threads = (uthread_t *)(exec + 1);
   exec->count = 0;
   exec->capacity = capacity;
   exec->stopped = 0;
