@@ -1,5 +1,5 @@
 #define DEBUG
-#include "../uthread.h"
+#include "../include/uthread.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>

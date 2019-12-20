@@ -18,12 +18,7 @@
 #error "NO DARWIN"
 #endif
 
-/* Defining this macro to 600 causes header files to expose definitions for
-SUSv3 (UNIX 03; i.e., the POSIX.1-2001 base specification plus the XSI
-extension)*/
-#define _XOPEN_SOURCE 600
-
-#include "../uthread.h"
+#include "../../include/uthread.h"
 #include <assert.h>
 #include <limits.h> //for CHAR_BIT
 #include <stdarg.h>
@@ -31,25 +26,6 @@ extension)*/
 #include <stdint.h> //for uintptr_t
 #include <stdlib.h> //for abort/malloc
 #include <string.h> //for memset
-#include <ucontext.h>
-
-struct uthread_executor_t {
-  uthread_t *threads;
-  ucontext_t join_ctx;
-  size_t current;
-  size_t count;
-  size_t capacity;
-  size_t stopped;
-};
-
-struct uthread_t {
-  void (*func)(uthread_t *, void *);
-  void *func_arg;
-  uthread_executor_t *exec;
-  uthread_state state;
-  ucontext_t ctx;
-  unsigned char stack[1024 * 4]; // 4kb
-};
 
 static uthread_t *uthread_impl_update_next(uthread_t *current_thread);
 static void uthread_impl_mark_aborted(uthread_t *);
@@ -152,5 +128,3 @@ static void uthread_impl_functor_wrapper(uint32_t low, uint32_t high) {
   uthread_t *thread = (uthread_t *)((uintptr_t)low | ((uintptr_t)high << 32));
   thread->func(thread, thread->func_arg);
 }
-
-#undef _XOPEN_SOURCE

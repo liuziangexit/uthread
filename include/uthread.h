@@ -22,7 +22,7 @@ extern "C" {
 #endif
 
 typedef struct uthread_executor_t uthread_executor_t;
-// uthread_t always have: uthread_executor_t *exec
+// uthread_t always have: uthread_executor_t *exec; uthread_state state;
 typedef struct uthread_t uthread_t;
 typedef enum uthread_state {
   CREATED,
@@ -33,6 +33,12 @@ typedef enum uthread_state {
   STOPPED,
   ABORTED
 } uthread_state;
+
+#ifndef _WIN32
+#include "uthread_sysv_def.h"
+#else
+#error "not implemented"
+#endif
 
 // create an executor
 uthread_executor_t *uthread_exec_create(size_t capacity);

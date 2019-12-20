@@ -13,12 +13,8 @@
  * the License.
  */
 
-#include "uthread.h"
-
 #ifndef _WIN32
-// assuming under System V
-#include "sysv/uthread_impl.c"
+#include "sysv/uthread_sysv_impl.c"
 #else
-// under Windows NT
 #include "nt/uthread_impl.c"
 #endif

@@ -12,4 +12,5 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-#error "not implemented yet"
+
+#error "not implemented"
