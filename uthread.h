@@ -22,6 +22,7 @@ extern "C" {
 #endif
 
 typedef struct uthread_executor_t uthread_executor_t;
+// uthread_t always have: uthread_executor_t *exec
 typedef struct uthread_t uthread_t;
 typedef enum uthread_state {
   CREATED,

@@ -45,7 +45,7 @@ struct uthread_executor_t {
 struct uthread_t {
   void (*func)(uthread_t *, void *);
   void *func_arg;
-  uthread_executor_t *pexec;
+  uthread_executor_t *exec;
   uthread_state state;
   ucontext_t ctx;
   unsigned char stack[1024 * 4]; // 4kb
@@ -84,7 +84,7 @@ int uthread_create(uthread_executor_t *exec, void (*func)(uthread_t *, void *),
   uthread_t *new_thread = &exec->threads[exec->count];
   new_thread->func = func;
   new_thread->func_arg = func_arg;
-  new_thread->pexec = exec;
+  new_thread->exec = exec;
   new_thread->state = CREATED;
   // create context
   if (getcontext(&new_thread->ctx) != 0)
@@ -111,8 +111,8 @@ void uthread_exec_join(uthread_executor_t *exec) {
 void uthread_exec_destroy(uthread_executor_t *exec) { free(exec); }
 
 void uthread_yield(uthread_t *current_thread) {
-  assert(current_thread->pexec->count - current_thread->pexec->stopped != 0);
-  if (current_thread->pexec->count - current_thread->pexec->stopped == 1)
+  assert(current_thread->exec->count - current_thread->exec->stopped != 0);
+  if (current_thread->exec->count - current_thread->exec->stopped == 1)
     return;
 
   current_thread->state = YIELDED;
@@ -126,10 +126,10 @@ void uthread_yield(uthread_t *current_thread) {
 
 void uthread_exit(uthread_t *current_thread) {
   current_thread->state = STOPPED;
-  current_thread->pexec->stopped++;
+  current_thread->exec->stopped++;
 
-  if (current_thread->pexec->count == current_thread->pexec->stopped) {
-    setcontext(&current_thread->pexec->join_ctx);
+  if (current_thread->exec->count == current_thread->exec->stopped) {
+    setcontext(&current_thread->exec->join_ctx);
   } else {
     uthread_t *next = uthread_impl_update_next(current_thread);
     next->state = RUNNING;
@@ -138,14 +138,14 @@ void uthread_exit(uthread_t *current_thread) {
 }
 
 static uthread_t *uthread_impl_update_next(uthread_t *current_thread) {
-  size_t *current_index = &current_thread->pexec->current;
-  *current_index = (*current_index + 1) % current_thread->pexec->count;
-  return &current_thread->pexec->threads[*current_index];
+  size_t *current_index = &current_thread->exec->current;
+  *current_index = (*current_index + 1) % current_thread->exec->count;
+  return &current_thread->exec->threads[*current_index];
 }
 
 static void uthread_impl_mark_aborted(uthread_t *handle) {
   handle->state = ABORTED;
-  handle->pexec->stopped++;
+  handle->exec->stopped++;
 }
 
 static void uthread_impl_functor_wrapper(uint32_t low, uint32_t high) {
