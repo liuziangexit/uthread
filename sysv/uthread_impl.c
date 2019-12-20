@@ -43,7 +43,7 @@ struct uthread_executor_t {
 };
 
 struct uthread_t {
-  void (*func)(void *, void *);
+  void (*func)(uthread_t *, void *);
   void *func_arg;
   uthread_executor_t *pexec;
   uthread_state state;
@@ -77,7 +77,7 @@ _Static_assert(CHAR_BIT == 8 // make sure a byte == 8 bit
                            sizeof(void *) / sizeof(int) == 2)), // 64bit
                "currently we only support 32bit and 64bit platforms");
 
-int uthread_create(uthread_executor_t *exec, void (*func)(void *, void *),
+int uthread_create(uthread_executor_t *exec, void (*func)(uthread_t *, void *),
                    void *func_arg) {
   if (exec->capacity == exec->count)
     return 0;
@@ -110,8 +110,7 @@ void uthread_exec_join(uthread_executor_t *exec) {
 
 void uthread_exec_destroy(uthread_executor_t *exec) { free(exec); }
 
-void uthread_yield(void *handle) {
-  uthread_t *current_thread = (uthread_t *)handle;
+void uthread_yield(uthread_t *current_thread) {
   assert(current_thread->pexec->count - current_thread->pexec->stopped != 0);
   if (current_thread->pexec->count - current_thread->pexec->stopped == 1)
     return;
@@ -125,8 +124,7 @@ void uthread_yield(void *handle) {
   }
 }
 
-void uthread_exit(void *handle) {
-  uthread_t *current_thread = (uthread_t *)handle;
+void uthread_exit(uthread_t *current_thread) {
   current_thread->state = STOPPED;
   current_thread->pexec->stopped++;
 
