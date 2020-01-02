@@ -79,6 +79,7 @@ void *server(void *a) {
 void *client(void *a) { printf("c\n"); }
 
 int main(int argc, char **args) {
+  int look = accept(0, 0, 0);
   pthread_t servert, clientt;
   pthread_create(&servert, 0, server, 0);
   pthread_create(&clientt, 0, client, 0);
