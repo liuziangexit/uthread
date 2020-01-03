@@ -28,9 +28,10 @@ test: build build_hook
 
 		@cc $(CFLAGS) $(DEBUG_FLAGS) -c $(TEST_SRC)/yield.c -o $(TEST_OUTPUT)/yield.o
 		@cc $(TEST_OUTPUT)/yield.o $(LIB_OUTPUT)/libuthread.a -o $(TEST_OUTPUT)/yield.dll
-
+		
+		@printf "\n\n***** gogogo *****\n\n"
 		@cc $(CFLAGS) $(DEBUG_FLAGS) -c $(TEST_SRC)/tcp.c -o $(TEST_OUTPUT)/tcp.o
-		@cc $(TEST_OUTPUT)/tcp.o $(LIB_OUTPUT)/libuthread.a -ldl -L$(LIB_OUTPUT) -l:libuhook.so -lpthread -Wl,-rpath,. -o $(TEST_OUTPUT)/tcp.dll
+		@cc $(TEST_OUTPUT)/tcp.o $(LIB_OUTPUT)/libuthread.a -ldl -L$(LIB_OUTPUT) -luhook -lpthread -Wl,-rpath,. -o $(TEST_OUTPUT)/tcp.dll
 		
 		@cp $(LIB_OUTPUT)/libuhook.so $(TEST_OUTPUT)
 		@rm -rf $(TEST_OUTPUT)/*.o
