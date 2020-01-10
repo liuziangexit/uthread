@@ -1,0 +1,17 @@
+name: C/C++ CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: cmake
+      run: cmake CMakeLists.txt -DUTHREAD_HOOK_STDOUT=TRUE
+    - name: make
+      run: make
+    - name: run
+      run: cd build/test&&./test_yield&&./test_hook
