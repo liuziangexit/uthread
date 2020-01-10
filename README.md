@@ -1,5 +1,5 @@
 # uthread
-[![Build Status](https://github.com/liuziangexit/uthread/workflows/C%2fC%2b%2b+CI/badge.svg)](https://github.com/liuziangexit/uthread/actions)
+[![Build Status](https://github.com/liuziangexit/uthread/workflows/build/badge.svg)](https://github.com/liuziangexit/uthread/actions)
 <br>
 Cross-platform implementation of user-space thread(As known as coroutine).
 <br>
