@@ -11,6 +11,10 @@
         "stddef.h": "c",
         "pthread.h": "c",
         "memory.h": "c",
-        "uthread_sysv_def.h": "c"
+        "uthread_sysv_def.h": "c",
+        "stdarg.h": "c",
+        "types.h": "c",
+        "dlfcn.h": "c",
+        "unistd.h": "c"
     }
 }

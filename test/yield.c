@@ -8,29 +8,20 @@
 
 int count = 0;
 
-void co(void *handle, void *arg) {
+void co(uthread_t *handle, void *arg) {
   count++;
 #ifndef NO_PRINT
-  if (sizeof(size_t) == 4)
-    printf("%d go\n", *(size_t *)arg);
-  else
-    printf("%ld go\n", *(size_t *)arg);
+  printf("%zu go\n", *(size_t *)arg);
 #endif
   uthread_yield(handle);
   count++;
 #ifndef NO_PRINT
-  if (sizeof(size_t) == 4)
-    printf("%d mid\n", *(size_t *)arg);
-  else
-    printf("%ld mid\n", *(size_t *)arg);
+  printf("%zu mid\n", *(size_t *)arg);
 #endif
   uthread_yield(handle);
   count++;
 #ifndef NO_PRINT
-  if (sizeof(size_t) == 4)
-    printf("%d ok\n", *(size_t *)arg);
-  else
-    printf("%ld ok\n", *(size_t *)arg);
+  printf("%zu ok\n", *(size_t *)arg);
 #endif
   uthread_exit(handle);
 }
