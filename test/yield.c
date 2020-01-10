@@ -8,7 +8,7 @@
 
 int count = 0;
 
-void co(void *handle, void *arg) {
+void co(uthread_t *handle, void *arg) {
   count++;
 #ifndef NO_PRINT
   if (sizeof(size_t) == 4)

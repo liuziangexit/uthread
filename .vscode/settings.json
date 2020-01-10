@@ -14,6 +14,7 @@
         "uthread_sysv_def.h": "c",
         "stdarg.h": "c",
         "types.h": "c",
-        "dlfcn.h": "c"
+        "dlfcn.h": "c",
+        "unistd.h": "c"
     }
 }

@@ -18,7 +18,6 @@
 #undef _GNU_SOURCE
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <unistd.h> //read & write
 
 /*
 hook the following system calls:
@@ -29,19 +28,41 @@ accept, connect, send, recv
 extern "C" {
 #endif
 
-typedef int (*accept_t)(int, struct sockaddr *, socklen_t *);
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
-  accept_t real_accept = (accept_t)dlsym(RTLD_NEXT, "accept");
-  printf("hook ok!!!\n");
-  //return real_accept(sockfd, addr, addrlen);
-  return 9710;
+#ifdef HOOK_STDOUT
+  printf("accept has been called\n");
+#endif
+  typedef int (*accept_t)(int, struct sockaddr *, socklen_t *);
+  accept_t real = (accept_t)dlsym(RTLD_NEXT, "accept");
+  return real(sockfd, addr, addrlen);
 }
 
-int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+#ifdef HOOK_STDOUT
+  printf("connect has been called\n");
+#endif
+  typedef int (*connect_t)(int, const struct sockaddr *, socklen_t);
+  connect_t real = (connect_t)dlsym(RTLD_NEXT, "connect");
+  return real(sockfd, addr, addrlen);
+}
 
-ssize_t send(int sockfd, const void *buf, size_t len, int flags);
+ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
+#ifdef HOOK_STDOUT
+  printf("send has been called\n");
+#endif
+  typedef ssize_t (*send_t)(int, const void *, size_t, int);
+  send_t real = (send_t)dlsym(RTLD_NEXT, "send");
+  return real(sockfd, buf, len, flags);
+}
 
-ssize_t recv(int sockfd, void *buf, size_t len, int flags);
+ssize_t recv(int sockfd, void *buf, size_t len, int flags) {
+#ifdef HOOK_STDOUT
+  printf("recv has been called\n");
+#endif
+  typedef ssize_t (*recv_t)(int, void *, size_t, int);
+  recv_t real = (recv_t)dlsym(RTLD_NEXT, "recv");
+  return real(sockfd, buf, len, flags);
+}
 
 #ifdef __cplusplus
 }

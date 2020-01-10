@@ -22,13 +22,13 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
 
 #disable MSVC language extensions
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
-    set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} /Za")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Za")
 endif()
 
 #options
-SET(UTHREAD_STATIC_LINKING FALSE CACHE BOOL "Link libuthread statically")
-SET(UTHREAD_OPTIMIZATION TRUE CACHE BOOL "Enable optimization")
-SET(UTHREAD_ENABLE_HOOK TRUE CACHE BOOL "Enable system call hook")
+set(UTHREAD_STATIC_LINKING FALSE CACHE BOOL "Link libuthread statically")
+set(UTHREAD_OPTIMIZATION TRUE CACHE BOOL "Enable optimization")
+set(UTHREAD_ENABLE_HOOK TRUE CACHE BOOL "Enable system call hook")
 
 message(STATUS "System            : ${CMAKE_SYSTEM_NAME}")
 message(STATUS "Project           : ${PROJECT_NAME}")
@@ -36,13 +36,19 @@ message(STATUS "Project directory : ${PROJECT_SOURCE_DIR}")
 
 #build libuthread
 add_library(uthread STATIC src/uthread.c)
-install(TARGETS uthread DESTINATION build/lib)
+set_target_properties(uthread PROPERTIES ARCHIVE_OUTPUT_DIRECTORY build/lib)
 
 #build uthread_hook
 add_library(uthread_hook SHARED src/uthread_hook.c)
-install(TARGETS uthread_hook DESTINATION build/lib)
+target_compile_definitions(uthread_hook PRIVATE HOOK_STDOUT)
+set_target_properties(uthread_hook PROPERTIES LIBRARY_OUTPUT_DIRECTORY build/lib)
 
 #build test
 add_executable(test_yield test/yield.c)
 target_link_libraries(test_yield uthread)
-install(TARGETS test_yield DESTINATION build/test)
+set_target_properties(test_yield PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
+
+add_executable(test_hook test/hook.c)
+target_link_libraries(test_hook dl)
+target_link_libraries(test_hook uthread_hook)
+set_target_properties(test_hook PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
