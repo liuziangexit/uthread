@@ -56,6 +56,7 @@ add_library(uthread_hook SHARED src/uthread_hook.c)
 if(UTHREAD_HOOK_STDOUT)
     target_compile_definitions(uthread_hook PRIVATE HOOK_STDOUT)
 endif()
+target_link_libraries(uthread_hook dl)
 set_target_properties(uthread_hook PROPERTIES LIBRARY_OUTPUT_DIRECTORY build/lib)
 
 #build test
@@ -65,7 +66,6 @@ set_target_properties(test_yield PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
 
 add_executable(test_hook test/hook.c)
 if(UTHREAD_ENABLE_HOOK)
-    target_link_libraries(test_hook dl)
     target_link_libraries(test_hook uthread_hook)
 endif()
 set_target_properties(test_hook PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
