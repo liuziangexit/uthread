@@ -2,15 +2,10 @@ cmake_minimum_required(VERSION 2.8)
 project(uthread)
 ENABLE_LANGUAGE(C)
 
-#debug flags
-set(UTHREAD_DEBUG_FLAGS "-O0 -g -pg")
-
-#release flags
-set(UTHREAD_RELEASE_FLAGS "-O3")
-
 #options
 set(UTHREAD_STATIC_LINKING FALSE CACHE BOOL "Link libuthread statically")
 set(UTHREAD_OPTIMIZATION TRUE CACHE BOOL "Enable optimization")
+set(UTHREAD_DEBUG FALSE CACHE BOOL "Build with debug information")
 set(UTHREAD_ENABLE_HOOK TRUE CACHE BOOL "Enable system call hook")
 set(UTHREAD_HOOK_STDOUT FALSE CACHE BOOL "Write infomations into standard output while hooked functions has been called")
 
@@ -23,11 +18,16 @@ else()
 message(STATUS "The compiler ${CMAKE_C_COMPILER} has no C11 support.")    
 endif()
 
-#set debug or release flags
+#set optimization flags
 if(UTHREAD_OPTIMIZATION)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${UTHREAD_RELEASE_FLAGS}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
 else()
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${UTHREAD_DEBUG_FLAGS}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
+endif()
+
+#debug flags
+if(UTHREAD_DEBUG)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -pg")
 endif()
 
 #set warning level: enable all warning
