@@ -13,7 +13,8 @@
  * the License.
  */
 
-// prevent compile under darwin kernel
+// prevent compile under darwin kernel. because darwin's implementation of
+// ucontext seems pretty strange. It doesn't work properly
 #ifdef __APPLE__
 #error "NO DARWIN"
 #endif
@@ -22,13 +23,13 @@
 #include "../collections/treetable.c"
 #include <assert.h>
 #include <limits.h> //for CHAR_BIT
+#include <pthread.h>
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stdint.h>    //for uintptr_t
-#include <stdlib.h>    //for abort/malloc
-#include <string.h>    //for memset
-#include <sys/epoll.h> // for epoll
-#include <threads.h>
+#include <stdint.h> //for uintptr_t
+#include <stdlib.h> //for abort/malloc
+#include <string.h> //for memset
+#include <sys/epoll.h>
 
 // BEGIN internal functions
 static uthread_t *uthread_impl_update_next(uthread_t *current_thread) {

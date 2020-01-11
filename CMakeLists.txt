@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.1)
 project(uthread)
 ENABLE_LANGUAGE(C)
 
@@ -61,5 +61,6 @@ set_target_properties(test_yield PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
 add_executable(test_hook test/hook.c)
 if(UTHREAD_ENABLE_HOOK)
     target_link_libraries(test_hook uthread_hook)
+    target_link_libraries(test_hook uthread)
 endif()
 set_target_properties(test_hook PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
