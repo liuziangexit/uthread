@@ -13,14 +13,11 @@
  * the License.
  */
 
-// prevent compile under darwin kernel. because darwin's implementation of
-// ucontext seems pretty strange. It doesn't work properly
-#ifdef __APPLE__
-#error "NO DARWIN"
+#ifndef __linux__
+#error "this implementation is only for linux"
 #endif
 
 #include "../../include/uthread.h"
-#include "../collections/treetable.c"
 #include <assert.h>
 #include <limits.h> //for CHAR_BIT
 #include <pthread.h>
@@ -49,16 +46,29 @@ static void uthread_impl_functor_wrapper(uint32_t low, uint32_t high) {
 }
 
 // OS Thread to current running uthread
-static TreeTable *ot2ut = 0;
+static pthread_key_t __cur_uthread_key;
+static pthread_once_t __cur_uthread_key_once = PTHREAD_ONCE_INIT;
 
-uthread_t *current_uthread() {
-  assert(ot2ut);
-  thrd_t current_os_thread = thrd_current();
-  void *current_uthread = 0;
-  if (treetable_get(ot2ut, current_os_thread, &current_uthread) == CC_OK)
-    return (uthread_t *)current_uthread;
-  else
-    return 0;
+static void uthread_impl_del_key() {
+  if (pthread_key_delete(__cur_uthread_key))
+    abort();
+}
+static void uthread_impl_init_key() {
+  if (pthread_key_create(&__cur_uthread_key, uthread_impl_del_key))
+    abort();
+}
+static void uthread_impl_set_current_uthread(uthread_t *c) {
+  if (pthread_once(&__cur_uthread_key_once, uthread_impl_init_key))
+    abort();
+  if (pthread_setspecific(__cur_uthread_key, (void *)c))
+    abort();
+}
+
+// expose for the access from hook_impl.c
+uthread_t *uthread_impl_current_uthread() {
+  if (pthread_once(&__cur_uthread_key_once, uthread_impl_init_key))
+    abort();
+  return (uthread_t *)pthread_getspecific(__cur_uthread_key);
 }
 // END internal functions
 
@@ -116,7 +126,9 @@ void uthread_exec_join(uthread_executor_t *exec) {
   if (exec->count > 0) {
     exec->current = 0;
     exec->threads[0].state = RUNNING;
+    uthread_impl_set_current_uthread(&exec->threads[0]);
     swapcontext(&exec->join_ctx, &exec->threads[0].ctx);
+    uthread_impl_set_current_uthread(0);
   }
 }
 
@@ -130,6 +142,7 @@ void uthread_yield(uthread_t *current_thread) {
   current_thread->state = YIELDED;
   uthread_t *next = uthread_impl_update_next(current_thread);
   next->state = RUNNING;
+  uthread_impl_set_current_uthread(next);
   if (swapcontext(&current_thread->ctx, &next->ctx) != 0) {
     uthread_impl_mark_aborted(current_thread);
     abort();
@@ -145,6 +158,7 @@ void uthread_exit(uthread_t *current_thread) {
   } else {
     uthread_t *next = uthread_impl_update_next(current_thread);
     next->state = RUNNING;
+    uthread_impl_set_current_uthread(next);
     setcontext(&next->ctx);
   }
 }

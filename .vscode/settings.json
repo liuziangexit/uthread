@@ -15,6 +15,7 @@
         "stdarg.h": "c",
         "types.h": "c",
         "dlfcn.h": "c",
-        "unistd.h": "c"
+        "unistd.h": "c",
+        "uthread_linux_def.h": "c"
     }
 }

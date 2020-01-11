@@ -18,6 +18,7 @@
 #include <stdio.h>
 #endif
 #undef _GNU_SOURCE
+#include "../../include/uthread.h"
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -25,6 +26,12 @@
 hook the following system calls:
 accept, connect, send, recv
  */
+
+static uthread_t *current_uthread() {
+  typedef uthread_t *(*uthread_impl_current_uthread_t)();
+  return ((uthread_impl_current_uthread_t)dlsym(
+      RTLD_NEXT, "uthread_impl_current_uthread"))();
+}
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,6 +41,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 #ifdef HOOK_STDOUT
   printf("accept has been called\n");
 #endif
+  uthread_t *current_thread = current_uthread();
   typedef int (*accept_t)(int, struct sockaddr *, socklen_t *);
   accept_t real = (accept_t)dlsym(RTLD_NEXT, "accept");
   return real(sockfd, addr, addrlen);

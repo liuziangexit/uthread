@@ -44,6 +44,7 @@ else()
     add_library(uthread SHARED src/uthread.c)
     set_target_properties(uthread PROPERTIES LIBRARY_OUTPUT_DIRECTORY build/lib)
 endif()
+target_link_libraries(uthread pthread)
 
 #build uthread_hook
 add_library(uthread_hook SHARED src/uthread_hook.c)

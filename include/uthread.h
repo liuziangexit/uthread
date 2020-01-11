@@ -34,8 +34,8 @@ typedef enum uthread_state {
   ABORTED
 } uthread_state;
 
-#ifndef _WIN32
-#include "uthread_sysv_def.h"
+#ifdef __linux__
+#include "uthread_linux_def.h"
 #else
 #error "not implemented"
 #endif

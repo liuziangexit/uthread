@@ -40,7 +40,8 @@ int main(int argc, char **args) {
   size_t uthread_args[CO_COUNT];
   for (size_t i = 0; i < CO_COUNT; i++) {
     uthread_args[i] = i + 1;
-    uthread_create(exec, co, &uthread_args[i]);
+    if (!uthread_create(exec, co, &uthread_args[i]))
+      abort();
   }
 
   int expect = CO_COUNT * 3;
