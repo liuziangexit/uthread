@@ -9,6 +9,7 @@ void uthread_func(uthread_t *handle, void *data) {
   connect(0, 0, 0);
   send(0, 0, 0, 0);
   recv(0, 0, 0, 0);
+  uthread_exit(handle);
 }
 
 int main(int c, char **v) {

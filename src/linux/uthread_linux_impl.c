@@ -128,7 +128,6 @@ void uthread_exec_join(uthread_executor_t *exec) {
     exec->threads[0].state = RUNNING;
     uthread_impl_set_current_uthread(&exec->threads[0]);
     swapcontext(&exec->join_ctx, &exec->threads[0].ctx);
-    uthread_impl_set_current_uthread(0);
   }
 }
 
@@ -154,6 +153,7 @@ void uthread_exit(uthread_t *current_thread) {
   current_thread->exec->stopped++;
 
   if (current_thread->exec->count == current_thread->exec->stopped) {
+    uthread_impl_set_current_uthread(0);
     setcontext(&current_thread->exec->join_ctx);
   } else {
     uthread_t *next = uthread_impl_update_next(current_thread);

@@ -49,7 +49,7 @@ target_link_libraries(uthread pthread)
 #build uthread_hook
 add_library(uthread_hook SHARED src/uthread_hook.c)
 if(UTHREAD_HOOK_STDOUT)
-    target_compile_definitions(uthread_hook PRIVATE HOOK_STDOUT)
+    target_compile_definitions(uthread_hook PRIVATE UTHREAD_HOOK_STDOUT)
 endif()
 target_link_libraries(uthread_hook dl)
 set_target_properties(uthread_hook PROPERTIES LIBRARY_OUTPUT_DIRECTORY build/lib)
