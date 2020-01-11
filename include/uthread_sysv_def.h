@@ -39,6 +39,6 @@ struct uthread_t {
   uthread_state state;
   ucontext_t ctx;
   unsigned char stack[1024 * 4]; // 4kb
+  int epoll;
 };
-
 #endif

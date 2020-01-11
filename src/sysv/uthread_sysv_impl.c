@@ -19,18 +19,49 @@
 #endif
 
 #include "../../include/uthread.h"
+#include "../collections/treetable.c"
 #include <assert.h>
 #include <limits.h> //for CHAR_BIT
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stdint.h> //for uintptr_t
-#include <stdlib.h> //for abort/malloc
-#include <string.h> //for memset
+#include <stdint.h>    //for uintptr_t
+#include <stdlib.h>    //for abort/malloc
+#include <string.h>    //for memset
+#include <sys/epoll.h> // for epoll
+#include <threads.h>
 
-static uthread_t *uthread_impl_update_next(uthread_t *current_thread);
-static void uthread_impl_mark_aborted(uthread_t *);
-static void uthread_impl_functor_wrapper(uint32_t, uint32_t);
+// BEGIN internal functions
+static uthread_t *uthread_impl_update_next(uthread_t *current_thread) {
+  size_t *current_index = &current_thread->exec->current;
+  *current_index = (*current_index + 1) % current_thread->exec->count;
+  return &current_thread->exec->threads[*current_index];
+}
 
+static void uthread_impl_mark_aborted(uthread_t *handle) {
+  handle->state = ABORTED;
+  handle->exec->stopped++;
+}
+
+static void uthread_impl_functor_wrapper(uint32_t low, uint32_t high) {
+  uthread_t *thread = (uthread_t *)((uintptr_t)low | ((uintptr_t)high << 32));
+  thread->func(thread, thread->func_arg);
+}
+
+// OS Thread to current running uthread
+static TreeTable *ot2ut = 0;
+
+uthread_t *current_uthread() {
+  assert(ot2ut);
+  thrd_t current_os_thread = thrd_current();
+  void *current_uthread = 0;
+  if (treetable_get(ot2ut, current_os_thread, &current_uthread) == CC_OK)
+    return (uthread_t *)current_uthread;
+  else
+    return 0;
+}
+// END internal functions
+
+// BEGIN API implementations
 uthread_executor_t *uthread_exec_create(size_t capacity) {
   uthread_executor_t *exec =
       malloc(sizeof(uthread_executor_t) + sizeof(uthread_t) * (capacity + 1));
@@ -57,6 +88,7 @@ int uthread_create(uthread_executor_t *exec, void (*func)(uthread_t *, void *),
                    void *func_arg) {
   if (exec->capacity == exec->count)
     return 0;
+
   uthread_t *new_thread = &exec->threads[exec->count];
   new_thread->func = func;
   new_thread->func_arg = func_arg;
@@ -72,6 +104,9 @@ int uthread_create(uthread_executor_t *exec, void (*func)(uthread_t *, void *),
   makecontext(&new_thread->ctx, (void (*)())uthread_impl_functor_wrapper, 2,
               (uint32_t)(uintptr_t)new_thread,
               (uint32_t)((uintptr_t)new_thread >> 32));
+  // epoll file descriptor set to -1 represent NULL
+  new_thread->epoll = -1;
+
   exec->count++;
   return 1;
 }
@@ -112,19 +147,4 @@ void uthread_exit(uthread_t *current_thread) {
     setcontext(&next->ctx);
   }
 }
-
-static uthread_t *uthread_impl_update_next(uthread_t *current_thread) {
-  size_t *current_index = &current_thread->exec->current;
-  *current_index = (*current_index + 1) % current_thread->exec->count;
-  return &current_thread->exec->threads[*current_index];
-}
-
-static void uthread_impl_mark_aborted(uthread_t *handle) {
-  handle->state = ABORTED;
-  handle->exec->stopped++;
-}
-
-static void uthread_impl_functor_wrapper(uint32_t low, uint32_t high) {
-  uthread_t *thread = (uthread_t *)((uintptr_t)low | ((uintptr_t)high << 32));
-  thread->func(thread, thread->func_arg);
-}
+// END API implementations

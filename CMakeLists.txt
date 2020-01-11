@@ -10,13 +10,7 @@ set(UTHREAD_ENABLE_HOOK TRUE CACHE BOOL "Enable system call hook")
 set(UTHREAD_HOOK_STDOUT FALSE CACHE BOOL "Write infomations into standard output while hooked functions has been called")
 
 #set C version: C11
-include(CheckCCompilerFlag)
-check_c_compiler_flag("-std=c11" COMPILER_SUPPORTS_C11)
-if(COMPILER_SUPPORTS_C11)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
-else()
-message(STATUS "The compiler ${CMAKE_C_COMPILER} has no C11 support.")    
-endif()
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
 
 #set optimization flags
 if(UTHREAD_OPTIMIZATION)
