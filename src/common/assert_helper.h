@@ -20,7 +20,7 @@
 #include <string.h>
 
 #define UTHREAD_CHECK(v, msg)                                                  \
-  if (v) {                                                                     \
+  if (!v) {                                                                    \
     size_t msglen = strlen(msg);                                               \
     if (*(msg + msglen) != '\n' && msglen <= 256 - 1 - 1) {                    \
       char tmp[256];                                                           \

@@ -18,6 +18,9 @@
         "unistd.h": "c",
         "uthread_linux_def.h": "c",
         "inttypes.h": "c",
-        "stdint.h": "c"
+        "stdint.h": "c",
+        "ioctl.h": "c",
+        "thread": "c",
+        "iterator": "c"
     }
 }

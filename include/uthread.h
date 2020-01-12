@@ -40,25 +40,78 @@ typedef enum uthread_state {
 #error "not implemented"
 #endif
 
-// create an executor
+/*
+FIXME 这个函数不应该暴露给用户，应该只在impl.c里声明和定义
+Causes the calling uthread to hang and another uthread that is ready to go will
+be resumed.
+This function can only be call by a uthread.
+------------------------
+handle: current uthread that will be hang up
+to: the thread thatzzzzz
+------------------------
+ */
+void uthread_yield_to(uthread_t *handle, uthread_t *to);
+
+/*
+Create an executor with specific capacity for uthread creation.
+Executor representd a group of uthread that can be executed by kernel
+thread.
+------------------------
+capacity: initial capacity for uthread
+------------------------
+return: created executor
+ */
 uthread_executor_t *uthread_exec_create(size_t capacity);
 
-// create an uthread under specific executor
-int uthread_create(uthread_executor_t *exec,
-                   void (*func)(uthread_t *handle, void *), void *func_arg);
+/*
+Create an uthread under specific executor.
+------------------------
+exec: executor to be holding new uthread
+func: uthread's job as void(uthread_t *handle, void* arg)
+func_arg: an pointer that will be passing to func
+------------------------
+return: return 1(true) if the operation success, otherwise return 0(false)
+ */
+int uthread_create(uthread_executor_t *exec, void (*func)(uthread_t *, void *),
+                   void *func_arg);
 
-// causes uthreads under the executor to be executed
-// the call will be blocked until all the uthreads exit or abort
+/*
+Execute the specific executor.
+This function will return until all the uthreads inside the executor has been
+exited or aborted.
+------------------------
+exec: executor to be execute
+------------------------
+return: none
+*/
 void uthread_exec_join(uthread_executor_t *exec);
 
 // destory specific executor
+/*
+------------------------
+------------------------
+ */
 void uthread_exec_destroy(uthread_executor_t *exec);
 
-// causes the calling uthread to yield execution to another uthread that is
-// ready to run on the current executor
+/*
+Causes the calling uthread to hang and another uthread that is ready to go will
+be resumed.
+This function can only be call by a uthread.
+------------------------
+handle: current uthread
+------------------------
+return: none
+ */
 void uthread_yield(uthread_t *handle);
 
-// causes the calling uthread to exit
+/*
+Causes calling uthread to exit.
+This function can only be call by a uthread.
+------------------------
+handle: current uthread
+------------------------
+return: none
+ */
 void uthread_exit(uthread_t *handle);
 
 #ifdef __cplusplus
