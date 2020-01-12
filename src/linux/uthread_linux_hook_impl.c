@@ -15,15 +15,18 @@
 #define _GNU_SOURCE
 #include <dlfcn.h> //for dlsym
 #ifdef UTHREAD_HOOK_STDOUT
+#include <inttypes.h> //stackoverflow.com/questions/5795978/string-format-for-intptr-t-and-uintptr-t
 #include <stdio.h>
 #endif
 #undef _GNU_SOURCE
 #include "../../include/uthread.h"
-#include <inttypes.h> //stackoverflow.com/questions/5795978/string-format-for-intptr-t-and-uintptr-t
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/socket.h>
 
-uthread_t *uthread_impl_current_uthread();
+uthread_executor_t *uthread_impl_current_exec();
+bool uthread_impl_init_epoll(uthread_executor_t *);
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,6 +37,13 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
   printf("accept(%d, %" PRIxPTR ", %" PRIxPTR ")\n", sockfd, (uintptr_t)addr,
          (uintptr_t)addrlen);
 #endif
+  uthread_executor_t *cur_exec = uthread_impl_current_exec();
+#ifdef UTHREAD_HOOK_STDOUT
+  printf("cur_exec == %" PRIxPTR "\n", (uintptr_t)cur_exec);
+#endif
+  if (!uthread_impl_init_epoll(cur_exec))
+    abort();
+
   typedef int (*accept_t)(int, struct sockaddr *, socklen_t *);
   accept_t real = (accept_t)dlsym(RTLD_NEXT, "accept");
   return real(sockfd, addr, addrlen);
@@ -44,6 +54,13 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
   printf("connect(%d, %" PRIxPTR ", %" PRIxPTR ")\n", sockfd, (uintptr_t)addr,
          (uintptr_t)addrlen);
 #endif
+  uthread_executor_t *cur_exec = uthread_impl_current_exec();
+#ifdef UTHREAD_HOOK_STDOUT
+  printf("cur_exec == %" PRIxPTR "\n", (uintptr_t)cur_exec);
+#endif
+  if (!uthread_impl_init_epoll(cur_exec))
+    abort();
+
   typedef int (*connect_t)(int, const struct sockaddr *, socklen_t);
   connect_t real = (connect_t)dlsym(RTLD_NEXT, "connect");
   return real(sockfd, addr, addrlen);
@@ -54,6 +71,13 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
   printf("send(%d, %" PRIxPTR ", %zu, %d)\n", sockfd, (uintptr_t)buf, len,
          flags);
 #endif
+  uthread_executor_t *cur_exec = uthread_impl_current_exec();
+#ifdef UTHREAD_HOOK_STDOUT
+  printf("cur_exec == %" PRIxPTR "\n", (uintptr_t)cur_exec);
+#endif
+  if (!cur_exec)
+    abort();
+
   typedef ssize_t (*send_t)(int, const void *, size_t, int);
   send_t real = (send_t)dlsym(RTLD_NEXT, "send");
   return real(sockfd, buf, len, flags);
@@ -64,6 +88,13 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags) {
   printf("recv(%d, %" PRIxPTR ", %zu, %d)\n", sockfd, (uintptr_t)buf, len,
          flags);
 #endif
+  uthread_executor_t *cur_exec = uthread_impl_current_exec();
+#ifdef UTHREAD_HOOK_STDOUT
+  printf("cur_exec == %" PRIxPTR "\n", (uintptr_t)cur_exec);
+#endif
+  if (!cur_exec)
+    abort();
+
   typedef ssize_t (*recv_t)(int, void *, size_t, int);
   recv_t real = (recv_t)dlsym(RTLD_NEXT, "recv");
   return real(sockfd, buf, len, flags);

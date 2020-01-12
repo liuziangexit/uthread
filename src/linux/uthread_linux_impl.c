@@ -27,6 +27,7 @@
 #include <stdlib.h> //for abort/malloc
 #include <string.h> //for memset
 #include <sys/epoll.h>
+#include <unistd.h>
 
 // BEGIN internal functions
 static uthread_t *uthread_impl_update_next(uthread_t *current_thread) {
@@ -34,12 +35,10 @@ static uthread_t *uthread_impl_update_next(uthread_t *current_thread) {
   *current_index = (*current_index + 1) % current_thread->exec->count;
   return &current_thread->exec->threads[*current_index];
 }
-
 static void uthread_impl_mark_aborted(uthread_t *handle) {
   handle->state = ABORTED;
   handle->exec->stopped++;
 }
-
 static void uthread_impl_functor_wrapper(uint32_t low, uint32_t high) {
   uthread_t *thread = (uthread_t *)((uintptr_t)low | ((uintptr_t)high << 32));
   thread->func(thread, thread->func_arg);
@@ -47,31 +46,43 @@ static void uthread_impl_functor_wrapper(uint32_t low, uint32_t high) {
   abort();
 }
 
-// OS Thread to current running uthread
-static pthread_key_t __cur_uthread_key;
-static pthread_once_t __cur_uthread_key_once = PTHREAD_ONCE_INIT;
+// OS Thread to current running uthread_exec
+static pthread_key_t __cur_exec_key;
+static pthread_once_t __cur_exec_key_once = PTHREAD_ONCE_INIT;
 
 static void uthread_impl_del_key() {
-  if (pthread_key_delete(__cur_uthread_key))
+  if (pthread_key_delete(__cur_exec_key))
     abort();
 }
 static void uthread_impl_init_key() {
-  if (pthread_key_create(&__cur_uthread_key, uthread_impl_del_key))
+  if (pthread_key_create(&__cur_exec_key, uthread_impl_del_key))
     abort();
 }
-static void uthread_impl_set_current_uthread(uthread_t *c) {
-  if (pthread_once(&__cur_uthread_key_once, uthread_impl_init_key))
+static void uthread_impl_set_current_exec(uthread_executor_t *exec) {
+  if (pthread_once(&__cur_exec_key_once, uthread_impl_init_key))
     abort();
-  if (pthread_setspecific(__cur_uthread_key, (void *)c))
+  if (pthread_setspecific(__cur_exec_key, (void *)exec))
     abort();
 }
 
-// expose for the access from hook_impl.c
-uthread_t *uthread_impl_current_uthread() {
-  if (pthread_once(&__cur_uthread_key_once, uthread_impl_init_key))
+// BEGIN exposed functions for the access from hook_impl.c
+uthread_executor_t *uthread_impl_current_exec() {
+  if (pthread_once(&__cur_exec_key_once, uthread_impl_init_key))
     abort();
-  return (uthread_t *)pthread_getspecific(__cur_uthread_key);
+  return (uthread_executor_t *)pthread_getspecific(__cur_exec_key);
 }
+
+bool uthread_impl_init_epoll(uthread_executor_t *exec) {
+  if (exec->epoll < 0) {
+    int new_epoll = epoll_create(1);
+    if (new_epoll < 0) {
+      return false;
+    }
+    exec->epoll = new_epoll;
+  }
+  return true;
+}
+// END exposed functions for the access from hook_impl.c
 // END internal functions
 
 // BEGIN API implementations
@@ -87,6 +98,8 @@ uthread_executor_t *uthread_exec_create(size_t capacity) {
   exec->count = 0;
   exec->capacity = capacity;
   exec->stopped = 0;
+  // epoll file descriptor set to -1 represent NULL
+  exec->epoll = -1;
   return exec;
 }
 
@@ -101,7 +114,6 @@ int uthread_create(uthread_executor_t *exec, void (*func)(uthread_t *, void *),
                    void *func_arg) {
   if (exec->capacity == exec->count)
     return 0;
-
   uthread_t *new_thread = &exec->threads[exec->count];
   new_thread->func = func;
   new_thread->func_arg = func_arg;
@@ -117,23 +129,34 @@ int uthread_create(uthread_executor_t *exec, void (*func)(uthread_t *, void *),
   makecontext(&new_thread->ctx, (void (*)())uthread_impl_functor_wrapper, 2,
               (uint32_t)(uintptr_t)new_thread,
               (uint32_t)((uintptr_t)new_thread >> 32));
-  // epoll file descriptor set to -1 represent NULL
-  new_thread->epoll = -1;
-
   exec->count++;
   return 1;
 }
 
 void uthread_exec_join(uthread_executor_t *exec) {
   if (exec->count > 0) {
+    uthread_impl_set_current_exec(exec);
     exec->current = 0;
     exec->threads[0].state = RUNNING;
-    uthread_impl_set_current_uthread(&exec->threads[0]);
     swapcontext(&exec->join_ctx, &exec->threads[0].ctx);
+    uthread_impl_set_current_exec(exec);
+
+    // remove all the sockets on the epoll
+    if (exec->epoll >= 0) {
+      // TODO
+    }
   }
 }
 
-void uthread_exec_destroy(uthread_executor_t *exec) { free(exec); }
+void uthread_exec_destroy(uthread_executor_t *exec) {
+  // close epoll
+  if (exec->epoll >= 0) {
+    // TODO abort if there is still some sockets on the epoll
+    if (close(exec->epoll))
+      abort();
+  }
+  free(exec);
+}
 
 void uthread_yield(uthread_t *current_thread) {
   assert(current_thread->exec->count - current_thread->exec->stopped != 0);
@@ -143,7 +166,6 @@ void uthread_yield(uthread_t *current_thread) {
   current_thread->state = YIELDED;
   uthread_t *next = uthread_impl_update_next(current_thread);
   next->state = RUNNING;
-  uthread_impl_set_current_uthread(next);
   if (swapcontext(&current_thread->ctx, &next->ctx) != 0) {
     uthread_impl_mark_aborted(current_thread);
     abort();
@@ -155,12 +177,10 @@ void uthread_exit(uthread_t *current_thread) {
   current_thread->exec->stopped++;
 
   if (current_thread->exec->count == current_thread->exec->stopped) {
-    uthread_impl_set_current_uthread(0);
     setcontext(&current_thread->exec->join_ctx);
   } else {
     uthread_t *next = uthread_impl_update_next(current_thread);
     next->state = RUNNING;
-    uthread_impl_set_current_uthread(next);
     setcontext(&next->ctx);
   }
 }

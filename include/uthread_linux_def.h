@@ -30,6 +30,7 @@ struct uthread_executor_t {
   size_t count;
   size_t capacity;
   size_t stopped;
+  int epoll;
 };
 
 struct uthread_t {
@@ -39,6 +40,5 @@ struct uthread_t {
   uthread_state state;
   ucontext_t ctx;
   unsigned char stack[1024 * 4]; // 4kb
-  int epoll;
 };
 #endif
