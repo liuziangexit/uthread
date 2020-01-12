@@ -19,13 +19,10 @@
 #endif
 #undef _GNU_SOURCE
 #include "../../include/uthread.h"
+#include <inttypes.h> //stackoverflow.com/questions/5795978/string-format-for-intptr-t-and-uintptr-t
+#include <stdint.h>
 #include <sys/socket.h>
-#include <sys/types.h>
 
-/*
-hook the following system calls:
-accept, connect, send, recv
- */
 uthread_t *uthread_impl_current_uthread();
 
 #ifdef __cplusplus
@@ -34,9 +31,9 @@ extern "C" {
 
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 #ifdef UTHREAD_HOOK_STDOUT
-  printf("accept has been called\n");
+  printf("accept(%d, %" PRIxPTR ", %" PRIxPTR ")\n", sockfd, (uintptr_t)addr,
+         (uintptr_t)addrlen);
 #endif
-  // uthread_t *current_thread = uthread_impl_current_uthread();
   typedef int (*accept_t)(int, struct sockaddr *, socklen_t *);
   accept_t real = (accept_t)dlsym(RTLD_NEXT, "accept");
   return real(sockfd, addr, addrlen);
@@ -44,7 +41,8 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 #ifdef UTHREAD_HOOK_STDOUT
-  printf("connect has been called\n");
+  printf("connect(%d, %" PRIxPTR ", %" PRIxPTR ")\n", sockfd, (uintptr_t)addr,
+         (uintptr_t)addrlen);
 #endif
   typedef int (*connect_t)(int, const struct sockaddr *, socklen_t);
   connect_t real = (connect_t)dlsym(RTLD_NEXT, "connect");
@@ -53,7 +51,8 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 
 ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
 #ifdef UTHREAD_HOOK_STDOUT
-  printf("send has been called\n");
+  printf("send(%d, %" PRIxPTR ", %zu, %d)\n", sockfd, (uintptr_t)buf, len,
+         flags);
 #endif
   typedef ssize_t (*send_t)(int, const void *, size_t, int);
   send_t real = (send_t)dlsym(RTLD_NEXT, "send");
@@ -62,11 +61,21 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
 
 ssize_t recv(int sockfd, void *buf, size_t len, int flags) {
 #ifdef UTHREAD_HOOK_STDOUT
-  printf("recv has been called\n");
+  printf("recv(%d, %" PRIxPTR ", %zu, %d)\n", sockfd, (uintptr_t)buf, len,
+         flags);
 #endif
   typedef ssize_t (*recv_t)(int, void *, size_t, int);
   recv_t real = (recv_t)dlsym(RTLD_NEXT, "recv");
   return real(sockfd, buf, len, flags);
+}
+
+int close(int fd) {
+#ifdef UTHREAD_HOOK_STDOUT
+  printf("close(%d)\n", fd);
+#endif
+  typedef int (*close_t)(int);
+  close_t real = (close_t)dlsym(RTLD_NEXT, "close");
+  return real(fd);
 }
 
 #ifdef __cplusplus
