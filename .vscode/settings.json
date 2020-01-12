@@ -16,6 +16,8 @@
         "types.h": "c",
         "dlfcn.h": "c",
         "unistd.h": "c",
-        "uthread_linux_def.h": "c"
+        "uthread_linux_def.h": "c",
+        "inttypes.h": "c",
+        "stdint.h": "c"
     }
 }
