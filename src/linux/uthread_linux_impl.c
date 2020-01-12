@@ -43,6 +43,8 @@ static void uthread_impl_mark_aborted(uthread_t *handle) {
 static void uthread_impl_functor_wrapper(uint32_t low, uint32_t high) {
   uthread_t *thread = (uthread_t *)((uintptr_t)low | ((uintptr_t)high << 32));
   thread->func(thread, thread->func_arg);
+  // if fuc doesn't call uthread_exit, then abort()
+  abort();
 }
 
 // OS Thread to current running uthread
