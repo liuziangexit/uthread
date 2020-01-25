@@ -29,11 +29,12 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 
+// TODO 把那些内部函数写到单独的头文件
+
 // BEGIN internal functions
-static uthread_t *uthread_impl_update_next(uthread_t *current_thread) {
-  size_t *current_index = &current_thread->exec->current;
-  *current_index = (*current_index + 1) % current_thread->exec->count;
-  return &current_thread->exec->threads[*current_index];
+static uthread_t *uthread_impl_get_next(uthread_t *current) {
+  return &current->exec->threads[ //
+      (current->exec->current + 1) % current->exec->count];
 }
 static void uthread_impl_mark_aborted(uthread_t *handle) {
   handle->state = ABORTED;
@@ -42,7 +43,7 @@ static void uthread_impl_mark_aborted(uthread_t *handle) {
 static void uthread_impl_functor_wrapper(uint32_t low, uint32_t high) {
   uthread_t *thread = (uthread_t *)((uintptr_t)low | ((uintptr_t)high << 32));
   thread->func(thread, thread->func_arg);
-  // if fuc doesn't call uthread_exit, then abort()
+  // if func doesn't call uthread_exit, then abort()
   abort();
 }
 
@@ -139,12 +140,6 @@ void uthread_exec_join(uthread_executor_t *exec) {
     exec->current = 0;
     exec->threads[0].state = RUNNING;
     swapcontext(&exec->join_ctx, &exec->threads[0].ctx);
-    uthread_impl_set_current_exec(exec);
-
-    // remove all the sockets on the epoll
-    if (exec->epoll >= 0) {
-      // TODO
-    }
   }
 }
 
@@ -152,24 +147,32 @@ void uthread_exec_destroy(uthread_executor_t *exec) {
   // close epoll
   if (exec->epoll >= 0) {
     // TODO abort if there is still some sockets on the epoll
+    // these sockets should be remove from epoll while close
     if (close(exec->epoll))
       abort();
   }
   free(exec);
 }
 
-void uthread_yield(uthread_t *current_thread) {
-  assert(current_thread->exec->count - current_thread->exec->stopped != 0);
-  if (current_thread->exec->count - current_thread->exec->stopped == 1)
-    return;
-
-  current_thread->state = YIELDED;
-  uthread_t *next = uthread_impl_update_next(current_thread);
-  next->state = RUNNING;
-  if (swapcontext(&current_thread->ctx, &next->ctx) != 0) {
-    uthread_impl_mark_aborted(current_thread);
+void uthread_switch(uthread_t *current, uthread_t *to) {
+  current->state = YIELDED;
+  // calculate the index of uthread "to"
+  current->exec->current = (intptr_t)to - (intptr_t)current->exec->threads /
+                                              (intptr_t)sizeof(uthread_t *);
+  to->state = RUNNING;
+  if (swapcontext(&current->ctx, &to->ctx) != 0) {
+    uthread_impl_mark_aborted(current);
     abort();
   }
+}
+
+void uthread_yield(uthread_t *current) {
+  assert(current->exec->count - current->exec->stopped != 0);
+  if (current->exec->count - current->exec->stopped == 1)
+    return;
+
+  uthread_switch(current, //
+                 uthread_impl_get_next(current));
 }
 
 void uthread_exit(uthread_t *current_thread) {
@@ -179,7 +182,7 @@ void uthread_exit(uthread_t *current_thread) {
   if (current_thread->exec->count == current_thread->exec->stopped) {
     setcontext(&current_thread->exec->join_ctx);
   } else {
-    uthread_t *next = uthread_impl_update_next(current_thread);
+    uthread_t *next = uthread_impl_get_next(current_thread);
     next->state = RUNNING;
     setcontext(&next->ctx);
   }

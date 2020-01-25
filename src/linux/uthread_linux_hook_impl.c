@@ -42,7 +42,8 @@ static void set_nonblock(int fd) {
 }
 */
 
-static void epoll_add(uthread_t *handle, int epoll, int fd, int events) {
+static void uthread_impl_epoll_add(uthread_t *handle, int epoll, int fd,
+                                   int events) {
   struct epoll_event ev;
   memset(&ev, 0, sizeof(struct epoll_event));
   ev.events = events;
@@ -51,12 +52,18 @@ static void epoll_add(uthread_t *handle, int epoll, int fd, int events) {
 }
 
 // switch to a uthread that has epoll event pending on
-static void epoll_switch(int epoll, uthread_t *cur_uthread) {
+static void uthread_impl_epoll_switch(int epoll, uthread_t *cur_uthread) {
   struct epoll_event ev;
   UTHREAD_CHECK(epoll_wait(epoll, &ev, 1, -1) >= 0, "epoll_wait failed");
   // under current implementation we only have EPOLLIN
   assert(ev.events & EPOLLIN != 0);
-  if (ev)
+
+  // if the current thread becomes readable then we return back
+  if (ev.data.ptr == cur_uthread) {
+    return;
+  }
+
+  // if another uthread becomes readable, we switch to that uthread
 }
 
 #ifdef __cplusplus
@@ -64,6 +71,7 @@ extern "C" {
 #endif
 
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
+  // TODO check the fd is actually on LISTEN mode
 #ifdef UTHREAD_HOOK_STDOUT
   printf("accept(%d, %" PRIxPTR ", %" PRIxPTR ")\n", sockfd, (uintptr_t)addr,
          (uintptr_t)addrlen);
@@ -82,7 +90,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
     return real(sockfd, addr, addrlen);
   }
 
-  // calling are from uthread
+  // call from uthread
   int unread = 0;
   UTHREAD_CHECK(ioctl(sockfd, FIONREAD, &unread) != -1, "ioctl failed");
   if (unread > 0) {
@@ -94,8 +102,12 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
     UTHREAD_CHECK(uthread_impl_init_epoll(cur_exec),
                   "can not initialize epoll");
     // 2. add listening socket into epoll's interest list
-    epoll_ctl_helper(&cur_exec->threads[cur_exec->current], cur_exec->epoll,
-                     sockfd, EPOLLIN);
+    epoll_add(&cur_exec->threads[cur_exec->current], cur_exec->epoll, sockfd,
+              EPOLLIN);
+    // 3. switch to other uthread
+    epoll_switch(cur_exec->epoll, &cur_exec->threads[cur_exec->current]);
+    // 4. control flow back to this uthread, do accept
+    return real(sockfd, addr, addrlen);
   }
 }
 

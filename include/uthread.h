@@ -41,18 +41,6 @@ typedef enum uthread_state {
 #endif
 
 /*
-FIXME 这个函数不应该暴露给用户，应该只在impl.c里声明和定义
-Causes the calling uthread to hang and another uthread that is ready to go will
-be resumed.
-This function can only be call by a uthread.
-------------------------
-handle: current uthread that will be hang up
-to: the thread thatzzzzz
-------------------------
- */
-void uthread_yield_to(uthread_t *handle, uthread_t *to);
-
-/*
 Create an executor with specific capacity for uthread creation.
 Executor representd a group of uthread that can be executed by kernel
 thread.
@@ -92,6 +80,16 @@ void uthread_exec_join(uthread_executor_t *exec);
 ------------------------
  */
 void uthread_exec_destroy(uthread_executor_t *exec);
+
+/*
+switch to another uthread.
+This function can only be called by a uthread.
+------------------------
+handle: current uthread
+to: specified thread to switch
+------------------------
+ */
+void uthread_switch(uthread_t *handle, uthread_t *to);
 
 /*
 Causes the calling uthread to hang and another uthread that is ready to go will

@@ -21,6 +21,8 @@
         "stdint.h": "c",
         "ioctl.h": "c",
         "thread": "c",
-        "iterator": "c"
+        "iterator": "c",
+        "locale": "c",
+        "string": "c"
     }
 }
