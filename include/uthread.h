@@ -15,6 +15,7 @@
 
 #ifndef __UTHREAD_H__
 #define __UTHREAD_H__
+#include <stdarg.h>
 #include <stddef.h> //for size_t
 
 #ifdef __cplusplus
@@ -34,83 +35,84 @@ typedef enum uthread_state {
   ABORTED
 } uthread_state;
 
-#ifdef __linux__
-#include "uthread_linux_def.h"
-#else
-#error "not implemented"
-#endif
+enum uthread_clsid {
+  EXECUTOR_CLS, // uthread_executor_t
+  UTHREAD_CLS   // uthread_t
+}
+
+enum uthread_error {
+  OK,
+  BAD_ARGUMENTS_ERR,
+  MEMORY_ALLOCATION_ERR,
+  SYSTEM_CALL_ERR
+}
 
 /*
-Create an executor with specific capacity for uthread creation.
-Executor representd a group of uthread that can be executed by kernel
-thread.
+Create various types of uthread object(listed in uthread_clsid).
 ------------------------
-capacity: initial capacity for uthread
+clsid: object type
+err: error code
+
+when EXECUTOR_CLS is specified the variable arguments are...
+size_t: initial capacity
+void*(*)(size_t): custom memory allocator(this argument is optional)
+
+when UTHREAD_CLS is specified the variable arguments are...
+uthread_executor_t*: executor
+void(*)(uthread_t *, void *): job
+void*: an pointer that will be passing into job
+void*(*)(size_t): custom memory allocator(this argument is optional)
 ------------------------
-return: created executor
+return: created object if *error==OK otherwise 0
  */
-uthread_executor_t *uthread_exec_create(size_t capacity);
+void *
+uthread_create(enum uthread_clsid clsid, enum uthread_error *err, ...);
 
 /*
-Create an uthread under specific executor.
+Run the specific executor.
+This function will block until all the uthreads inside the executor has been
+exited(or one of them has been marked as ABORTED).
 ------------------------
-exec: executor to be holding new uthread
-func: uthread's job as void(uthread_t *handle, void* arg)
-func_arg: an pointer that will be passing to func
+exec: executor to run
 ------------------------
-return: return 1(true) if the operation success, otherwise return 0(false)
- */
-int uthread_create(uthread_executor_t *exec, void (*func)(uthread_t *, void *),
-                   void *func_arg);
-
-/*
-Execute the specific executor.
-This function will return until all the uthreads inside the executor has been
-exited or aborted.
-------------------------
-exec: executor to be execute
-------------------------
-return: none
+return: OK|SYSTEM_CALL_ERR
 */
-void uthread_exec_join(uthread_executor_t *exec);
-
-// destory specific executor
-/*
-------------------------
-------------------------
- */
-void uthread_exec_destroy(uthread_executor_t *exec);
+enum uthread_error uthread_join(uthread_executor_t *exec);
 
 /*
-switch to another uthread.
-This function can only be called by a uthread.
+Destory object created by uthread_create.
 ------------------------
-handle: current uthread
-to: specified thread to switch
-------------------------
- */
-void uthread_switch(uthread_t *handle, uthread_t *to);
-
-/*
-Causes the calling uthread to hang and another uthread that is ready to go will
-be resumed.
-This function can only be call by a uthread.
-------------------------
-handle: current uthread
+clsid: object type
+obj: object to be destory
 ------------------------
 return: none
  */
-void uthread_yield(uthread_t *handle);
+void uthread_destroy(enum uthread_clsid clsid, void *obj);
 
 /*
-Causes calling uthread to exit.
-This function can only be call by a uthread.
+Yield the current control flow to specified uthread.
 ------------------------
-handle: current uthread
+to: thread to switch
 ------------------------
 return: none
  */
-void uthread_exit(uthread_t *handle);
+void uthread_switch(uthread_t *to);
+
+/*
+Yield the current control flow to unspecified uthread.
+------------------------
+------------------------
+return: none
+ */
+void uthread_yield();
+
+/*
+Causes the calling uthread to exit.
+------------------------
+------------------------
+return: none
+ */
+void uthread_exit();
 
 #ifdef __cplusplus
 }

@@ -14,10 +14,6 @@
  */
 
 #ifdef __linux__
-#include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 8)
-#error "linux kernel before 2.6.8 is not supported"
-#endif
 #include "linux/uthread_linux_impl.c"
 #else
 #endif
