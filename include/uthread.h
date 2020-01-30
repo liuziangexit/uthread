@@ -35,17 +35,17 @@ typedef enum uthread_state {
   ABORTED
 } uthread_state;
 
-enum uthread_clsid {
+typedef enum uthread_clsid {
   EXECUTOR_CLS, // uthread_executor_t
   UTHREAD_CLS   // uthread_t
-}
+} uthread_clsid;
 
-enum uthread_error {
+typedef enum uthread_error {
   OK,
   BAD_ARGUMENTS_ERR,
   MEMORY_ALLOCATION_ERR,
   SYSTEM_CALL_ERR
-}
+} uthread_error;
 
 /*
 Create various types of uthread object(listed in uthread_clsid).
@@ -55,18 +55,17 @@ err: error code
 
 when EXECUTOR_CLS is specified the variable arguments are...
 size_t: initial capacity
-void*(*)(size_t): custom memory allocator(this argument is optional)
+void*(*)(size_t): custom memory allocator(if 0 use malloc)
 
 when UTHREAD_CLS is specified the variable arguments are...
 uthread_executor_t*: executor
 void(*)(uthread_t *, void *): job
 void*: an pointer that will be passing into job
-void*(*)(size_t): custom memory allocator(this argument is optional)
+void*(*)(size_t): custom memory allocator(if 0 use malloc)
 ------------------------
 return: created object if *error==OK otherwise 0
  */
-void *
-uthread_create(enum uthread_clsid clsid, enum uthread_error *err, ...);
+void *uthread_create(enum uthread_clsid clsid, enum uthread_error *err, ...);
 
 /*
 Run the specific executor.

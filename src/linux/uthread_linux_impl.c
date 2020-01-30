@@ -23,4 +23,56 @@
 #endif
 
 #include "../../include/uthread.h"
-#include "../../include/uthread_linux_def"
+#include "../../include/uthread_linux_def.h"
+#include <stdlib.h> // malloc
+
+_Static_assert(_Alignof(uthread_executor_t) == _Alignof(uthread_t),
+               "the alignment requirement of uthread_executor_t and "
+               "uthread_t can not be matched");
+void *uthread_create(enum uthread_clsid clsid, enum uthread_error *err, ...) {
+  if (clsid == EXECUTOR_CLS) {
+    va_list args;
+    va_start(args, err);
+    size_t init_cap = va_arg(args, size_t);
+    void *(*alloc)(size_t) = va_arg(args, void *(*)(size_t));
+    va_end(args);
+
+    // if custom allocator==0 use malloc
+    if (!alloc) {
+      alloc = malloc;
+    }
+    uthread_executor_t *exec =
+        alloc(sizeof(uthread_executor_t) + sizeof(uthread_t) * init_cap);
+    // memory allocation failed
+    if (exec == 0) {
+      *err = MEMORY_ALLOCATION_ERR;
+      return 0;
+    }
+    exec->threads = (uthread_t *)(exec + 1);
+    exec->count = 0;
+    exec->capacity = init_cap;
+    exec->stopped = 0;
+    // epoll file descriptor set to -1 represent NULL
+    exec->epoll = -1;
+    *err = OK;
+    return exec;
+  } else if (clsid == UTHREAD_CLS) {
+    va_list args;
+    va_start(args, err);
+
+    va_end(args);
+  } else {
+    *err = BAD_ARGUMENTS_ERR;
+    return 0;
+  }
+}
+
+enum uthread_error uthread_join(uthread_executor_t *exec);
+
+void uthread_destroy(enum uthread_clsid clsid, void *obj);
+
+void uthread_switch(uthread_t *to);
+
+void uthread_yield();
+
+void uthread_exit();

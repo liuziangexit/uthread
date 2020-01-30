@@ -46,22 +46,6 @@ else()
 endif()
 target_link_libraries(uthread pthread)
 
-#build uthread_hook
-add_library(uthread_hook SHARED src/uthread_hook.c)
-if(UTHREAD_HOOK_STDOUT)
-    target_compile_definitions(uthread_hook PRIVATE UTHREAD_HOOK_STDOUT)
-endif()
-target_link_libraries(uthread_hook dl)
-set_target_properties(uthread_hook PROPERTIES LIBRARY_OUTPUT_DIRECTORY build/lib)
-
-#build test
-add_executable(test_yield test/yield.c)
-target_link_libraries(test_yield uthread)
-set_target_properties(test_yield PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
-
-add_executable(test_hook test/hook.c)
-if(UTHREAD_ENABLE_HOOK)
-    target_link_libraries(test_hook uthread_hook)
-    target_link_libraries(test_hook uthread)
-endif()
-set_target_properties(test_hook PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
+add_executable(test_build test/build.c)
+target_link_libraries(test_build uthread)
+set_target_properties(test_build PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
