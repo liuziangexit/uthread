@@ -59,7 +59,7 @@ void *uthread_create(enum uthread_clsid clsid, enum uthread_error *err, ...) {
   } else if (clsid == UTHREAD_CLS) {
     va_list args;
     va_start(args, err);
-
+//savepoint
     va_end(args);
   } else {
     *err = BAD_ARGUMENTS_ERR;
