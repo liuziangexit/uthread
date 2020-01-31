@@ -47,6 +47,13 @@ typedef enum uthread_error {
   SYSTEM_CALL_ERR
 } uthread_error;
 
+// type definition
+#ifdef __linux__
+#include "uthread_linux_def.h"
+#else
+#error "not implemented"
+#endif
+
 /*
 Create various types of uthread object(listed in uthread_clsid).
 ------------------------
@@ -61,7 +68,6 @@ when UTHREAD_CLS is specified the variable arguments are...
 uthread_executor_t*: executor
 void(*)(uthread_t *, void *): job
 void*: an pointer that will be passing into job
-void*(*)(size_t): custom memory allocator(if 0 use malloc)
 ------------------------
 return: created object if *error==OK otherwise 0
  */
@@ -83,10 +89,13 @@ Destory object created by uthread_create.
 ------------------------
 clsid: object type
 obj: object to be destory
+dealloc: if obj was created by a custom alloc then we need a corresponding
+dealloc otherwise passing 0
 ------------------------
 return: none
  */
-void uthread_destroy(enum uthread_clsid clsid, void *obj);
+void uthread_destroy(enum uthread_clsid clsid, void *obj,
+                     void (*dealloc)(void *));
 
 /*
 Yield the current control flow to specified uthread.
