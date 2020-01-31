@@ -28,8 +28,8 @@ void co(uthread_t *handle, void *arg) {
 
 int main(int argc, char **args) {
   printf("go\n------------\n");
-  static const size_t CO_COUNT = 180000;
-  static const size_t CO_CAP = 180000;
+  static const size_t CO_COUNT = 5;
+  static const size_t CO_CAP = 5;
   assert(CO_CAP >= CO_COUNT);
   uthread_error err;
   uthread_executor_t *exec = uthread_create(EXECUTOR_CLS, &err, CO_CAP, 0);

@@ -23,6 +23,10 @@
         "thread": "c",
         "iterator": "c",
         "locale": "c",
-        "string": "c"
+        "string": "c",
+        "chrono": "c",
+        "unordered_map": "c",
+        "bitset": "c",
+        "assert_helper.h": "c"
     }
 }

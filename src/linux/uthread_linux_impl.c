@@ -23,16 +23,15 @@
 #endif
 
 #include "../../include/uthread.h"
+#include "../common/assert_helper.h"
 #include "uthread_linux_impl_cur_ut.c"
-#include <assert.h>
 #include <stdint.h> //for int32_t etc...
 #include <stdlib.h> // malloc
 
 static void uimpl_functor_wrapper(uint32_t low, uint32_t high) {
   uthread_t *thread = (uthread_t *)((uintptr_t)low | ((uintptr_t)high << 32));
   thread->func(thread, thread->func_arg);
-  // if func doesn't call uthread_exit, then abort()
-  abort();
+  UTHREAD_ABORT("uthread quit without calling uthread_exit");
 }
 
 static uthread_executor_t *uimpl_exec(uthread_t *ut) {
@@ -45,7 +44,7 @@ static uthread_executor_t *uimpl_exec(uthread_t *ut) {
 static uthread_t *uimpl_next(uthread_t *cur) {
   uthread_executor_t *exec = uimpl_exec(cur);
 #ifdef UTHREAD_DEBUG
-  assert(exec->current == cur->idx);
+  UTHREAD_CHECK(exec->current == cur->idx, "uimpl_next check failed");
 #endif
   if (exec->stopped == exec->count - 1) {
     return 0;
@@ -56,7 +55,7 @@ static uthread_t *uimpl_next(uthread_t *cur) {
     next = &exec->threads[next_idx++ % exec->count];
   }
 #ifdef UTHREAD_DEBUG
-  assert(next != cur);
+  UTHREAD_CHECK(next != cur, "uimpl_next check failed");
 #endif
   return next;
 }
@@ -64,15 +63,16 @@ static uthread_t *uimpl_next(uthread_t *cur) {
 static void uimpl_switch(uthread_t *cur, uthread_t *to,
                          uthread_state cur_state) {
 #ifdef UTHREAD_STRICTLY_CHECK
-  if (cur->state != RUNNING || to->state == STOPPED || to->state == RUNNING)
-    abort();
+  UTHREAD_CHECK(cur->state == RUNNING && to->state != STOPPED &&
+                    to->state != RUNNING,
+                "uimpl_switch check failed");
 #endif
   cur->state = cur_state;
   to->state = RUNNING;
   uimpl_exec(cur)->current = to->idx;
   uimpl_set_cur_ut(to);
   if (swapcontext(&cur->ctx, &to->ctx) != 0) {
-    abort();
+    UTHREAD_ABORT("uimpl_switch swapcontext failed");
   }
 }
 
@@ -162,8 +162,8 @@ void uthread_destroy(enum uthread_clsid clsid, void *obj,
   if (clsid == EXECUTOR_CLS) {
     uthread_executor_t *obj_typed = (uthread_executor_t *)obj;
     // 1.check all uthread are quited
-    if (obj_typed->stopped != obj_typed->count)
-      abort();
+    UTHREAD_CHECK(obj_typed->stopped == obj_typed->count,
+                  "some uthreads are not stopped yet");
 
     if (obj_typed->epoll != -1) {
       /*
@@ -179,11 +179,8 @@ void uthread_destroy(enum uthread_clsid clsid, void *obj,
     if (dealloc == 0)
       dealloc = free;
     dealloc(obj);
-  } else if (clsid == UTHREAD_CLS) {
-    abort(); // you can't destory a uthread!
   } else {
-    // what?
-    abort();
+    UTHREAD_ABORT("uthread_destroy wrong clsid");
   }
 }
 
@@ -203,7 +200,7 @@ void uthread_exit() {
   if (exec->count == exec->stopped + 1) {
     cur->state = STOPPED;
     exec->stopped++;
-    assert(uimpl_set_cur_ut(0));
+    UTHREAD_CHECK(uimpl_set_cur_ut(0), "uthread_exit uimpl_set_cur_ut failed");
     setcontext(&exec->join_ctx);
   } else {
     uthread_t *next = uimpl_next(cur);

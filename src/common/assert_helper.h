@@ -20,7 +20,22 @@
 #include <string.h>
 
 #define UTHREAD_CHECK(v, msg)                                                  \
-  if (!v) {                                                                    \
+  if (!(v)) {                                                                  \
+    size_t msglen = strlen(msg);                                               \
+    if (*(msg + msglen) != '\n' && msglen <= 256 - 1 - 1) {                    \
+      char tmp[256];                                                           \
+      memcpy(tmp, msg, msglen);                                                \
+      tmp[msglen] = '\n';                                                      \
+      tmp[msglen + 1] = 0;                                                     \
+      fprintf(stderr, tmp);                                                    \
+    } else {                                                                   \
+      fprintf(stderr, msg);                                                    \
+    }                                                                          \
+    abort();                                                                   \
+  }
+
+#define UTHREAD_ABORT(msg)                                                     \
+  {                                                                            \
     size_t msglen = strlen(msg);                                               \
     if (*(msg + msglen) != '\n' && msglen <= 256 - 1 - 1) {                    \
       char tmp[256];                                                           \

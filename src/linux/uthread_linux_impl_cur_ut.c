@@ -14,9 +14,9 @@
  */
 
 #include "../../include/uthread.h"
+#include "../common/assert_helper.h"
 #include <pthread.h>
 #include <stdbool.h>
-#include <stdlib.h> //for abort
 
 static pthread_key_t __cur_ut_key;
 // 0 indicates the key has not been created yet
@@ -24,7 +24,7 @@ static int __cur_ut_key_created_flag = 0;
 
 static void uimpl_del_key() {
   if (pthread_key_delete(__cur_ut_key))
-    abort();
+    UTHREAD_ABORT("uimpl_del_key pthread_key_delete failed");
 }
 bool uimpl_set_cur_ut(uthread_t *ut) {
   if (!__cur_ut_key_created_flag) {

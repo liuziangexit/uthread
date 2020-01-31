@@ -75,7 +75,7 @@ void *uthread_create(enum uthread_clsid clsid, enum uthread_error *err, ...);
 /*
 Run the specific executor.
 This function will block until all the uthreads inside the executor has been
-exited(or one of them has been marked as ABORTED).
+exited.
 ------------------------
 exec: executor to run
 ------------------------
