@@ -28,10 +28,11 @@ void co(uthread_t *handle, void *arg) {
 
 int main(int argc, char **args) {
   printf("go\n------------\n");
-  static const size_t CO_COUNT = 5;
-  static const size_t CO_CAP = 80000;
+  static const size_t CO_COUNT = 180000;
+  static const size_t CO_CAP = 180000;
   assert(CO_CAP >= CO_COUNT);
-  uthread_executor_t *exec = uthread_exec_create(CO_CAP);
+  uthread_error err;
+  uthread_executor_t *exec = uthread_create(EXECUTOR_CLS, &err, CO_CAP, 0);
   if (!exec) {
     printf("create exec failed\n");
     abort();
@@ -40,13 +41,14 @@ int main(int argc, char **args) {
   size_t uthread_args[CO_COUNT];
   for (size_t i = 0; i < CO_COUNT; i++) {
     uthread_args[i] = i + 1;
-    if (!uthread_create(exec, co, &uthread_args[i]))
+    uthread_create(UTHREAD_CLS, &err, exec, co, &uthread_args[i]);
+    if (err != OK)
       abort();
   }
 
   int expect = CO_COUNT * 3;
-  uthread_exec_join(exec);
-  uthread_exec_destroy(exec);
+  uthread_join(exec);
+  uthread_destroy(EXECUTOR_CLS, exec, 0);
   printf("count is %d(expect %d)\n", count, expect);
   printf("------------\nok\n");
   return 0;

@@ -22,7 +22,7 @@ extension)*/
 #define _XOPEN_SOURCE 600
 #include <ucontext.h>
 #undef _XOPEN_SOURCE
-#include <stdint.h> //uint32_t
+#include <stddef.h> //size_t
 
 struct uthread_executor_t {
   uthread_t *threads;
@@ -38,7 +38,7 @@ struct uthread_t {
   void (*func)(uthread_t *, void *);
   void *func_arg;
   uthread_state state;
-  uint32_t idx;
+  size_t idx;
   ucontext_t ctx;
   unsigned char stack[1024 * 4]; // 4kb
 };

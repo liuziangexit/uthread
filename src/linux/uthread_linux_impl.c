@@ -24,6 +24,7 @@
 
 #include "../../include/uthread.h"
 #include "uthread_linux_impl_cur_ut.c"
+#include <assert.h>
 #include <stdint.h> //for int32_t etc...
 #include <stdlib.h> // malloc
 
@@ -39,6 +40,40 @@ static uthread_executor_t *uimpl_exec(uthread_t *ut) {
   vut -= ut->idx * sizeof(uthread_t);
   vut -= sizeof(uthread_executor_t);
   return (uthread_executor_t *)vut;
+}
+
+static uthread_t *uimpl_next(uthread_t *cur) {
+  uthread_executor_t *exec = uimpl_exec(cur);
+#ifdef UTHREAD_DEBUG
+  assert(exec->current == cur->idx);
+#endif
+  if (exec->stopped == exec->count - 1) {
+    return 0;
+  }
+  size_t next_idx = cur->idx + 1;
+  uthread_t *next = &exec->threads[next_idx++ % exec->count];
+  while (next->state == STOPPED) {
+    next = &exec->threads[next_idx++ % exec->count];
+  }
+#ifdef UTHREAD_DEBUG
+  assert(next != cur);
+#endif
+  return next;
+}
+
+static void uimpl_switch(uthread_t *cur, uthread_t *to,
+                         uthread_state cur_state) {
+#ifdef UTHREAD_STRICTLY_CHECK
+  if (cur->state != RUNNING || to->state == STOPPED || to->state == RUNNING)
+    abort();
+#endif
+  cur->state = cur_state;
+  to->state = RUNNING;
+  uimpl_exec(cur)->current = to->idx;
+  uimpl_set_cur_ut(to);
+  if (swapcontext(&cur->ctx, &to->ctx) != 0) {
+    abort();
+  }
 }
 
 _Static_assert(_Alignof(uthread_executor_t) == _Alignof(uthread_t),
@@ -152,8 +187,27 @@ void uthread_destroy(enum uthread_clsid clsid, void *obj,
   }
 }
 
-void uthread_switch(uthread_t *to);
+void uthread_switch(uthread_t *to) {
+  uimpl_switch(uimpl_cur_ut(), to, YIELDED);
+}
 
-void uthread_yield();
+void uthread_yield() {
+  uthread_t *next = uimpl_next(uimpl_cur_ut());
+  if (next)
+    uthread_switch(next);
+}
 
-void uthread_exit();
+void uthread_exit() {
+  uthread_t *cur = uimpl_cur_ut();
+  uthread_executor_t *exec = uimpl_exec(cur);
+  if (exec->count == exec->stopped + 1) {
+    cur->state = STOPPED;
+    exec->stopped++;
+    assert(uimpl_set_cur_ut(0));
+    setcontext(&exec->join_ctx);
+  } else {
+    uthread_t *next = uimpl_next(cur);
+    exec->stopped++;
+    uimpl_switch(cur, next, STOPPED);
+  }
+}

@@ -56,8 +56,9 @@ static void uthread_impl_epoll_switch(int epoll, uthread_t *cur_uthread) {
   struct epoll_event ev;
   UTHREAD_CHECK(epoll_wait(epoll, &ev, 1, -1) >= 0, "epoll_wait failed");
   // under current implementation we only have EPOLLIN
+#ifdef UTHREAD_DEBUG
   assert(ev.events & EPOLLIN != 0);
-
+#endif
   // if the current thread becomes readable then we return back
   if (ev.data.ptr == cur_uthread) {
     return;

@@ -31,8 +31,7 @@ typedef enum uthread_state {
   WAITING_IO,     // waiting for an IO operation
   YIELDED,        // uthread_yield has just been called
   RUNNING,
-  STOPPED,
-  ABORTED
+  STOPPED
 } uthread_state;
 
 typedef enum uthread_clsid {
