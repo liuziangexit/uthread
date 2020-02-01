@@ -19,9 +19,15 @@
 /* Defining this macro to 600 causes header files to expose definitions for
 SUSv3 (UNIX 03; i.e., the POSIX.1-2001 base specification plus the XSI
 extension)*/
+#ifdef _XOPEN_SOURCE
+// https://gcc.gnu.org/onlinedocs/gcc/Push_002fPop-Macro-Pragmas.html
+#pragma push_macro("_XOPEN_SOURCE")
+#undef _XOPEN_SOURCE
+#endif
 #define _XOPEN_SOURCE 600
 #include <ucontext.h>
 #undef _XOPEN_SOURCE
+#pragma pop_macro("_XOPEN_SOURCE")
 #include <stddef.h> //size_t
 
 struct uthread_executor_t {
@@ -42,4 +48,5 @@ struct uthread_t {
   ucontext_t ctx;
   unsigned char stack[1024 * 4]; // 4kb
 };
+
 #endif

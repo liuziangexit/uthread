@@ -12,13 +12,14 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+
 #define _GNU_SOURCE
 #include <dlfcn.h> //for dlsym
+#undef _GNU_SOURCE
 #ifdef UTHREAD_HOOK_STDOUT
 #include <inttypes.h> //stackoverflow.com/questions/5795978/string-format-for-intptr-t-and-uintptr-t
 #include <stdio.h>
 #endif
-#undef _GNU_SOURCE
 #include "../../include/uthread.h"
 #include "../common/assert_helper.h"
 #include <fcntl.h>
