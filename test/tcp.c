@@ -13,7 +13,7 @@ typedef struct {
   struct sockaddr_in addr;
 } client_info;
 
-void server_client_thread(uthread_t *current_thread, void *arg) {
+void server_work_thread(void *arg) {
   client_info *client = (client_info *)arg;
   printf("server_co handling new client\n");
   /*
@@ -30,7 +30,7 @@ void server_client_thread(uthread_t *current_thread, void *arg) {
   */
 }
 
-void server_accept_thread(uthread_t *current_thread, void *arg) {
+void server_accept_thread(void *arg) {
   int server_fd = (int)(ptrdiff_t)arg;
   struct sockaddr_in remote_addr;
   socklen_t remote_addr_len = sizeof(remote_addr);
@@ -39,13 +39,15 @@ void server_accept_thread(uthread_t *current_thread, void *arg) {
         accept(server_fd, (struct sockaddr *)&remote_addr, &remote_addr_len);
     if (client_fd < 0) {
       printf("error: accept failed\n");
-      uthread_exit(current_thread);
+      uthread_exit();
     }
 
     client_info *c = malloc(sizeof(client_info));
     c->fd = client_fd;
     memcpy(&c->addr, &remote_addr, remote_addr_len);
-    uthread_create(current_thread->exec, server_client_thread, c);
+    uthread_error err;
+    uthread_create(UTHREAD_CLS, &err, uthread_current(EXECUTOR_CLS),
+                   server_work_thread, c);
   }
 }
 
@@ -70,20 +72,29 @@ void *server(void *a) {
     printf("error: listen failed\n");
     pthread_exit(0);
   }
-  uthread_executor_t *exec = uthread_exec_create(5);
-  uthread_create(exec, server_accept_thread, (ptrdiff_t)server_fd);
-  uthread_exec_join(exec);
-  uthread_exec_destroy(exec);
+  uthread_error err;
+  uthread_executor_t *exec = uthread_create(EXECUTOR_CLS, &err, 5, 0);
+  if (err != OK)
+    abort();
+  uthread_create(UTHREAD_CLS, &err, exec, server_accept_thread,
+                 (ptrdiff_t)server_fd);
+  if (err != OK)
+    abort();
+  uthread_join(exec);
+  uthread_destroy(EXECUTOR_CLS, exec, 0);
+  pthread_exit(0);
 }
 
-void *client(void *a) { printf("c\n"); }
+void *client(void *a) {
+  printf("c\n");
+  pthread_exit(0);
+}
 
 int main(int argc, char **args) {
-  int look = accept(0, 0, 0);
   pthread_t servert, clientt;
   pthread_create(&servert, 0, server, 0);
-  pthread_create(&clientt, 0, client, 0);
+  //pthread_create(&clientt, 0, client, 0);
 
   pthread_join(servert, 0);
-  pthread_join(clientt, 0);
+  //pthread_join(clientt, 0);
 }

@@ -65,7 +65,7 @@ void*(*)(size_t): custom memory allocator(if 0 use malloc)
 
 when UTHREAD_CLS is specified the variable arguments are...
 uthread_executor_t*: executor
-void(*)(uthread_t *, void *): job
+void(*)(void *): job
 void*: an pointer that will be passing into job
 ------------------------
 return: created object if *error==OK otherwise 0
@@ -120,6 +120,15 @@ Causes the calling uthread to exit.
 return: none
  */
 void uthread_exit();
+
+/*
+retrieve current uthread or executor
+------------------------
+clsid: EXECUTOR_CLS | UTHREAD_CLS
+------------------------
+return: pointer to required object if there is, otherwise 0
+ */
+void *uthread_current(uthread_clsid clsid);
 
 #ifdef __cplusplus
 }

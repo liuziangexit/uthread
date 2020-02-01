@@ -26,7 +26,7 @@ static void uimpl_del_key() {
   if (pthread_key_delete(__cur_ut_key))
     UTHREAD_ABORT("uimpl_del_key pthread_key_delete failed");
 }
-bool uimpl_set_cur_ut(uthread_t *ut) {
+static bool uimpl_set_cur_ut(uthread_t *ut) {
   if (!__cur_ut_key_created_flag) {
     if (pthread_key_create(&__cur_ut_key, uimpl_del_key))
       return false;

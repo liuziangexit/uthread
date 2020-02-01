@@ -8,22 +8,22 @@
 
 int count = 0;
 
-void co(uthread_t *handle, void *arg) {
+void co(void *arg) {
   count++;
 #ifndef NO_PRINT
   printf("%zu go\n", *(size_t *)arg);
 #endif
-  uthread_yield(handle);
+  uthread_yield();
   count++;
 #ifndef NO_PRINT
   printf("%zu mid\n", *(size_t *)arg);
 #endif
-  uthread_yield(handle);
+  uthread_yield();
   count++;
 #ifndef NO_PRINT
   printf("%zu ok\n", *(size_t *)arg);
 #endif
-  uthread_exit(handle);
+  uthread_exit();
 }
 
 int main(int argc, char **args) {

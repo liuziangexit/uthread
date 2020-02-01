@@ -19,33 +19,29 @@
 #include <stdlib.h>
 #include <string.h>
 
+// FIXME 这段代码已经确认有越界，有空de一下
+static void add_n_print(char *msg) {
+  size_t msglen = strlen(msg);
+  if (*(msg + msglen) != '\n' && msglen <= 256 - 1 - 1) {
+    char tmp[256];
+    memcpy(tmp, msg, msglen);
+    tmp[msglen] = '\n';
+    tmp[msglen + 1] = 0;
+    fprintf(stderr, tmp);
+  } else {
+    fprintf(stderr, msg);
+  }
+}
+
 #define UTHREAD_CHECK(v, msg)                                                  \
   if (!(v)) {                                                                  \
-    size_t msglen = strlen(msg);                                               \
-    if (*(msg + msglen) != '\n' && msglen <= 256 - 1 - 1) {                    \
-      char tmp[256];                                                           \
-      memcpy(tmp, msg, msglen);                                                \
-      tmp[msglen] = '\n';                                                      \
-      tmp[msglen + 1] = 0;                                                     \
-      fprintf(stderr, tmp);                                                    \
-    } else {                                                                   \
-      fprintf(stderr, msg);                                                    \
-    }                                                                          \
+    add_n_print(msg);                                                          \
     abort();                                                                   \
   }
 
 #define UTHREAD_ABORT(msg)                                                     \
   {                                                                            \
-    size_t msglen = strlen(msg);                                               \
-    if (*(msg + msglen) != '\n' && msglen <= 256 - 1 - 1) {                    \
-      char tmp[256];                                                           \
-      memcpy(tmp, msg, msglen);                                                \
-      tmp[msglen] = '\n';                                                      \
-      tmp[msglen + 1] = 0;                                                     \
-      fprintf(stderr, tmp);                                                    \
-    } else {                                                                   \
-      fprintf(stderr, msg);                                                    \
-    }                                                                          \
+    add_n_print(msg);                                                          \
     abort();                                                                   \
   }
 

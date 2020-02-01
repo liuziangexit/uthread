@@ -27,14 +27,15 @@
 #include "uthread_linux_impl_cur_ut.c"
 #include <stdint.h> //for int32_t etc...
 #include <stdlib.h> // malloc
+#include <unistd.h> //close
 
 static void uimpl_functor_wrapper(uint32_t low, uint32_t high) {
   uthread_t *thread = (uthread_t *)((uintptr_t)low | ((uintptr_t)high << 32));
-  thread->func(thread, thread->func_arg);
+  thread->func(thread->func_arg);
   UTHREAD_ABORT("uthread quit without calling uthread_exit");
 }
 
-static uthread_executor_t *uimpl_exec(uthread_t *ut) {
+uthread_executor_t *uimpl_exec(uthread_t *ut) {
   void *vut = ut;
   vut -= ut->idx * sizeof(uthread_t);
   vut -= sizeof(uthread_executor_t);
@@ -110,8 +111,7 @@ void *uthread_create(enum uthread_clsid clsid, enum uthread_error *err, ...) {
     va_list args;
     va_start(args, err);
     uthread_executor_t *exec = va_arg(args, uthread_executor_t *);
-    void (*job)(uthread_t *, void *) =
-        va_arg(args, void (*)(uthread_t *, void *));
+    void (*job)(void *) = va_arg(args, void (*)(void *));
     void *job_arg = va_arg(args, void *);
     va_end(args);
 
@@ -165,17 +165,11 @@ void uthread_destroy(enum uthread_clsid clsid, void *obj,
     UTHREAD_CHECK(obj_typed->stopped == obj_typed->count,
                   "some uthreads are not stopped yet");
 
-    if (obj_typed->epoll != -1) {
-      /*
-      2.check there is no fd are currently combined on the epoll(fd
-       will be automatically unregister from the epoll when the system call
-      'close' has been called)
-      */
-
-      // 3.close epoll
-      // how to close the epoll?
+    if (obj_typed->epoll >= 0) {
+      // 2.close epoll
+      close(obj_typed->epoll);
     }
-    // 4.free
+    // 3.free
     if (dealloc == 0)
       dealloc = free;
     dealloc(obj);
@@ -206,5 +200,19 @@ void uthread_exit() {
     uthread_t *next = uimpl_next(cur);
     exec->stopped++;
     uimpl_switch(cur, next, STOPPED);
+  }
+}
+
+void *uthread_current(uthread_clsid clsid) {
+  if (clsid == UTHREAD_CLS) {
+    return uimpl_cur_ut();
+  } else if (clsid == EXECUTOR_CLS) {
+    uthread_t *cur_ut = uimpl_cur_ut();
+    if (cur_ut)
+      return uimpl_exec(cur_ut);
+    else
+      return 0;
+  } else {
+    abort();
   }
 }

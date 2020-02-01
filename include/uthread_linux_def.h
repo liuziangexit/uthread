@@ -41,7 +41,7 @@ struct uthread_executor_t {
 };
 
 struct uthread_t {
-  void (*func)(uthread_t *, void *);
+  void (*func)(void *);
   void *func_arg;
   uthread_state state;
   size_t idx;
