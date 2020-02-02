@@ -132,6 +132,7 @@ void *uthread_create(enum uthread_clsid clsid, enum uthread_error *err, ...) {
     // setup context stack
     new_thread->ctx.uc_stack.ss_sp = &new_thread->stack;
     new_thread->ctx.uc_stack.ss_size = sizeof(new_thread->stack);
+    new_thread->ctx.uc_link = 0;
     // cxt will begin with job_func
     makecontext(&new_thread->ctx, (void (*)())uimpl_functor_wrapper, 2,
                 (uint32_t)(uintptr_t)new_thread,

@@ -19,29 +19,23 @@
 #include <stdlib.h>
 #include <string.h>
 
-// FIXME 这段代码已经确认有越界，有空de一下
-static void add_n_print(char *msg) {
-  size_t msglen = strlen(msg);
-  if (*(msg + msglen) != '\n' && msglen <= 256 - 1 - 1) {
-    char tmp[256];
-    memcpy(tmp, msg, msglen);
-    tmp[msglen] = '\n';
-    tmp[msglen + 1] = 0;
-    fprintf(stderr, tmp);
-  } else {
-    fprintf(stderr, msg);
-  }
-}
+/*
+注意，在这里不使用stderr的原因是，stderr是所谓“unbuffered”模式的，
+对这种模式的stream进行输出最终会调用到glibc中的buffered_vfprintf函数，
+这个函数会在栈上开辟8192字节的空间，而目前我们uthread的栈空间是4k，因此会导致栈溢出
+
+出于这样的考虑，我们使用stdout
+ */
 
 #define UTHREAD_CHECK(v, msg)                                                  \
   if (!(v)) {                                                                  \
-    add_n_print(msg);                                                          \
+    fprintf(stdout, "%s\n", (const char *)msg);                                \
     abort();                                                                   \
   }
 
 #define UTHREAD_ABORT(msg)                                                     \
   {                                                                            \
-    add_n_print(msg);                                                          \
+    fprintf(stdout, "%s\n", (const char *)msg);                                \
     abort();                                                                   \
   }
 
