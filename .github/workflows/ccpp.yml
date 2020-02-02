@@ -14,4 +14,4 @@ jobs:
     - name: make
       run: make
     - name: run
-      run: cd build/test&&./test_yield&&./test_hook
+      run: cd build/test&&./test_yield
