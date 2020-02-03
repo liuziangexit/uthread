@@ -22,11 +22,17 @@
 #error "linux kernel before 2.6.8 is not supported"
 #endif
 
+#ifdef UTHREAD_DEBUG
+#include <inttypes.h> //stackoverflow.com/questions/5795978/string-format-for-intptr-t-and-uintptr-t
+#include <stdio.h>
+#endif
+
 #include "../../include/uthread.h"
 #include "../common/assert_helper.h"
 #include "uthread_linux_impl_cur_ut.c"
 #include <stdint.h> //for int32_t etc...
 #include <stdlib.h> // malloc
+#include <sys/epoll.h>
 #include <unistd.h> //close
 
 static void uimpl_functor_wrapper(uint32_t low, uint32_t high) {
@@ -42,7 +48,7 @@ uthread_executor_t *uimpl_exec(uthread_t *ut) {
   return (uthread_executor_t *)vut;
 }
 
-static uthread_t *uimpl_next(uthread_t *cur) {
+uthread_t *uimpl_next(uthread_t *cur) {
   uthread_executor_t *exec = uimpl_exec(cur);
 #ifdef UTHREAD_DEBUG
   UTHREAD_CHECK(exec->current == cur->idx, "uimpl_next check failed");
@@ -50,20 +56,36 @@ static uthread_t *uimpl_next(uthread_t *cur) {
   if (exec->stopped == exec->count - 1) {
     return 0;
   }
+  // 1. check the threads that are pending on IO
+  if (exec->epoll >= 0) {
+    struct epoll_event ev;
+    // this call will not block
+    int ev_cnt = epoll_wait(exec->epoll, &ev, 1, 0);
+    UTHREAD_CHECK(ev_cnt != -1, "epoll_wait failed");
+    if (ev_cnt == 1) {
+      return ev.data.ptr;
+    }
+  }
+  // 2. look for a thread that has been YIELDED
   size_t next_idx = cur->idx + 1;
   uthread_t *next = &exec->threads[next_idx++ % exec->count];
-  while (next->state == STOPPED) {
+  while (next != cur && next->state != YIELDED && next->state != CREATED) {
     next = &exec->threads[next_idx++ % exec->count];
   }
-#ifdef UTHREAD_DEBUG
-  UTHREAD_CHECK(next != cur, "uimpl_next check failed");
-#endif
+  if (next == cur)
+    return 0; // not found
   return next;
 }
 
-static void uimpl_switch(uthread_t *cur, uthread_t *to,
-                         uthread_state cur_state) {
-#ifdef UTHREAD_STRICTLY_CHECK
+void uimpl_switch(uthread_t *cur, uthread_t *to, uthread_state cur_state) {
+#ifdef UTHREAD_DEBUG
+  printf("[exec: %" PRIxPTR ", ut: %" PRIxPTR "]: switch to %" PRIxPTR "\n",
+         (uintptr_t)uthread_current(EXECUTOR_CLS),
+         (uintptr_t)uthread_current(UTHREAD_CLS), (uintptr_t)to);
+#endif
+  if (cur == to)
+    return;
+#ifdef UTHREAD_DEBUG
   UTHREAD_CHECK(cur->state == RUNNING && to->state != STOPPED &&
                     to->state != RUNNING,
                 "uimpl_switch check failed");

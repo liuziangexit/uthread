@@ -7,7 +7,6 @@ set(UTHREAD_STATIC_LINKING FALSE CACHE BOOL "Link libuthread statically")
 set(UTHREAD_OPTIMIZATION TRUE CACHE BOOL "Enable optimization")
 set(UTHREAD_DEBUG FALSE CACHE BOOL "Build with debug information")
 set(UTHREAD_ENABLE_HOOK TRUE CACHE BOOL "Enable system call hook")
-set(UTHREAD_HOOK_STDOUT FALSE CACHE BOOL "Write infomations into standard output while hooked functions has been called")
 
 #set C version: C11
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
@@ -53,9 +52,6 @@ target_link_libraries(uthread pthread)
 
 #build uthread_hook
 add_library(uthread_hook SHARED src/uthread_hook.c)
-if(UTHREAD_HOOK_STDOUT)
-    target_compile_definitions(uthread_hook PRIVATE UTHREAD_HOOK_STDOUT)
-endif()
 if(UTHREAD_DEBUG)
     target_compile_definitions(uthread_hook PRIVATE UTHREAD_DEBUG)
 else()

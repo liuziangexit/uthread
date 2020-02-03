@@ -16,7 +16,7 @@
 #define _GNU_SOURCE
 #include <dlfcn.h> //for dlsym
 #undef _GNU_SOURCE
-#ifdef UTHREAD_HOOK_STDOUT
+#ifdef UTHREAD_DEBUG
 #include <inttypes.h> //stackoverflow.com/questions/5795978/string-format-for-intptr-t-and-uintptr-t
 #include <stdio.h>
 #endif
@@ -30,6 +30,9 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+uthread_t *uimpl_next(uthread_t *cur);
+void uimpl_switch(uthread_t *cur, uthread_t *to, uthread_state cur_state);
 
 static bool uimpl_epoll_init(uthread_executor_t *exec) {
   if (exec->epoll < 0) {
@@ -58,25 +61,27 @@ static void uimpl_epoll_del(int epoll, int fd) {
 
 // switch to a uthread that has a epoll event pending on
 static void uimpl_epoll_switch(int epoll, uthread_t *cur_uthread) {
-  cur_uthread->state = WAITING_IO;
-  struct epoll_event ev;
-#ifdef UTHREAD_HOOK_STDOUT
-  printf("[exec: %" PRIxPTR ", ut: %" PRIxPTR "]: begin epoll_wait\n",
-         (uintptr_t)uthread_current(EXECUTOR_CLS),
-         (uintptr_t)uthread_current(UTHREAD_CLS));
+  uthread_t *next = uimpl_next(cur_uthread);
+  if (!next) {
+    cur_uthread->state = WAITING_IO;
+    struct epoll_event ev;
+#ifdef UTHREAD_DEBUG
+    printf("[exec: %" PRIxPTR ", ut: %" PRIxPTR "]: begin epoll_wait\n",
+           (uintptr_t)uthread_current(EXECUTOR_CLS),
+           (uintptr_t)uthread_current(UTHREAD_CLS));
 #endif
-  UTHREAD_CHECK(epoll_wait(epoll, &ev, 1, -1) != -1, "epoll_wait failed");
-#ifdef UTHREAD_HOOK_STDOUT
-  printf("[exec: %" PRIxPTR ", ut: %" PRIxPTR "]: end epoll_wait\n",
-         (uintptr_t)uthread_current(EXECUTOR_CLS),
-         (uintptr_t)uthread_current(UTHREAD_CLS));
+    UTHREAD_CHECK(epoll_wait(epoll, &ev, 1, -1) == 1, "epoll_wait failed");
+#ifdef UTHREAD_DEBUG
+    printf("[exec: %" PRIxPTR ", ut: %" PRIxPTR "]: end epoll_wait\n",
+           (uintptr_t)uthread_current(EXECUTOR_CLS),
+           (uintptr_t)uthread_current(UTHREAD_CLS));
 #endif
-  // if another uthread(the fd bind with it) becomes readable, we switch to that
-  // thread.
-  // if the available uthread is the current uthread then just return back.
-  if (ev.data.ptr != cur_uthread) {
-    uthread_switch(ev.data.ptr);
+    next = ev.data.ptr;
+    cur_uthread->state = RUNNING;
   }
+  // if another uthread(the fd bind with it) becomes readable, we switch to
+  // that thread.
+  uimpl_switch(cur_uthread, next, WAITING_IO);
   cur_uthread->state = RUNNING;
 }
 
@@ -101,7 +106,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 #ifdef UTHREAD_DEBUG
   // TODO check the fd is actually on LISTEN mode
 #endif
-#ifdef UTHREAD_HOOK_STDOUT
+#ifdef UTHREAD_DEBUG
   printf("[exec: %" PRIxPTR ", ut: %" PRIxPTR "]: accept(%d, %" PRIxPTR
          ", %" PRIxPTR ")\n",
          (uintptr_t)uthread_current(EXECUTOR_CLS),
@@ -137,8 +142,8 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
                     sockfd, EPOLLIN);
     // 3. switch to other uthread
     uimpl_epoll_switch(cur_exec->epoll, &cur_exec->threads[cur_exec->current]);
-    // 4. when the control flow goes back, remove the socket from epoll interest
-    // list
+    // 4. when the control flow goes back, remove the socket from epoll
+    // interest list
     uimpl_epoll_del(cur_exec->epoll, sockfd);
     // 5. do accept
     return real(sockfd, addr, addrlen);
@@ -146,7 +151,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 }
 
 int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
-#ifdef UTHREAD_HOOK_STDOUT
+#ifdef UTHREAD_DEBUG
   printf("[exec: %" PRIxPTR ", ut: %" PRIxPTR "]: connect(%d, %" PRIxPTR
          ", %d)\n",
          (uintptr_t)uthread_current(EXECUTOR_CLS),
@@ -205,12 +210,12 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
 }
 /*
 ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
-#ifdef UTHREAD_HOOK_STDOUT
+#ifdef UTHREAD_DEBUG
   printf("send(%d, %" PRIxPTR ", %zu, %d)\n", sockfd, (uintptr_t)buf, len,
          flags);
 #endif
   uthread_executor_t *cur_exec = uthread_impl_current_exec();
-#ifdef UTHREAD_HOOK_STDOUT
+#ifdef UTHREAD_DEBUG
   printf("cur_exec == %" PRIxPTR "\n", (uintptr_t)cur_exec);
 #endif
   UTHREAD_CHECK(cur_exec, "send are not calling under uthread");
@@ -221,12 +226,12 @@ ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
 }
 
 ssize_t recv(int sockfd, void *buf, size_t len, int flags) {
-#ifdef UTHREAD_HOOK_STDOUT
+#ifdef UTHREAD_DEBUG
   printf("recv(%d, %" PRIxPTR ", %zu, %d)\n", sockfd, (uintptr_t)buf, len,
          flags);
 #endif
   uthread_executor_t *cur_exec = uthread_impl_current_exec();
-#ifdef UTHREAD_HOOK_STDOUT
+#ifdef UTHREAD_DEBUG
   printf("cur_exec == %" PRIxPTR "\n", (uintptr_t)cur_exec);
 #endif
   UTHREAD_CHECK(cur_exec, "recv are not calling under uthread");
@@ -237,7 +242,7 @@ ssize_t recv(int sockfd, void *buf, size_t len, int flags) {
 }
 
 int close(int fd) {
-#ifdef UTHREAD_HOOK_STDOUT
+#ifdef UTHREAD_DEBUG
   printf("close(%d)\n", fd);
 #endif
   typedef int (*close_t)(int);

@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: cmake
-      run: cmake CMakeLists.txt -DUTHREAD_HOOK_STDOUT=TRUE
+      run: cmake CMakeLists.txt
     - name: make
       run: make
     - name: run

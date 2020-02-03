@@ -3,7 +3,6 @@
 #include <errno.h>
 #include <memory.h>
 #include <netinet/in.h>
-#include <pthread.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -13,11 +12,6 @@
 #include <unistd.h>
 
 // TODO 支持在uthread中创建uthread，支持自动扩容
-
-// thread clientt wait until thread servert begins listen
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-bool listen_has_begun = false;
 
 typedef struct {
   int fd;
@@ -41,8 +35,27 @@ void server_work_thread(void *arg) {
   */
 }
 
-void server_accept_thread(void *arg) {
-  int server_fd = (int)(ptrdiff_t)arg;
+void server(void *arg) {
+  int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (server_fd < 0) {
+    printf("server socket creation failed\n");
+    uthread_exit();
+  }
+
+  struct sockaddr_in server_addr;
+  memset(&server_addr, 0, sizeof(server_addr));
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_addr.s_addr = INADDR_ANY;
+  server_addr.sin_port = htons(9844);
+  if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) <
+      0) {
+    printf("server binding failed\n");
+    uthread_exit();
+  }
+  if (listen(server_fd, 5)) {
+    printf("server listen failed\n");
+    uthread_exit();
+  }
   struct sockaddr_in remote_addr;
   socklen_t remote_addr_len = sizeof(remote_addr);
   while (1) {
@@ -62,48 +75,10 @@ void server_accept_thread(void *arg) {
     // uthread_create(UTHREAD_CLS, &err, uthread_current(EXECUTOR_CLS),
     //                server_work_thread, c);
   }
+  uthread_exit();
 }
 
-void *server(void *a) {
-  int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (server_fd < 0) {
-    printf("server socket creation failed\n");
-    pthread_exit(0);
-  }
-
-  struct sockaddr_in server_addr;
-  memset(&server_addr, 0, sizeof(server_addr));
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = INADDR_ANY;
-  server_addr.sin_port = htons(9844);
-  if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) <
-      0) {
-    printf("server binding failed\n");
-    pthread_exit(0);
-  }
-  if (listen(server_fd, 5)) {
-    printf("server listen failed\n");
-    pthread_exit(0);
-  }
-  pthread_mutex_lock(&mutex);
-  listen_has_begun = true;
-  printf("server listen_has_begun has been marked as true\n");
-  pthread_cond_signal(&cond);
-  pthread_mutex_unlock(&mutex);
-  uthread_error err;
-  uthread_executor_t *exec = uthread_create(EXECUTOR_CLS, &err, 5, 0);
-  if (err != OK)
-    abort();
-  uthread_create(UTHREAD_CLS, &err, exec, server_accept_thread,
-                 (ptrdiff_t)server_fd);
-  if (err != OK)
-    abort();
-  uthread_join(exec);
-  uthread_destroy(EXECUTOR_CLS, exec, 0);
-  pthread_exit(0);
-}
-
-void client_thread(void *a) {
+void client(void *arg) {
   int sockfd;
   struct sockaddr_in their_addr;
   their_addr.sin_family = AF_INET;
@@ -113,13 +88,6 @@ void client_thread(void *a) {
   if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
     abort();
   }
-  printf("client begin wait\n");
-  pthread_mutex_lock(&mutex);
-  while (!listen_has_begun) {
-    pthread_cond_wait(&cond, &mutex);
-  }
-  pthread_mutex_unlock(&mutex);
-  printf("client end wait\n");
 
   printf("client begin connect\n");
   if (connect(sockfd, (struct sockaddr *)&their_addr,
@@ -148,24 +116,11 @@ void client_thread(void *a) {
   uthread_exit();
 }
 
-void *client(void *a) {
+int main(int argc, char **args) {
   uthread_error err;
-  uthread_executor_t *exec = uthread_create(EXECUTOR_CLS, &err, 5, 0);
-  if (err != OK)
-    abort();
-  uthread_create(UTHREAD_CLS, &err, exec, client_thread, 0);
-  if (err != OK)
-    abort();
+  uthread_executor_t *exec = uthread_create(EXECUTOR_CLS, &err, 2, 0);
+  uthread_create(UTHREAD_CLS, &err, exec, server, 0);
+  uthread_create(UTHREAD_CLS, &err, exec, client, 0);
   uthread_join(exec);
   uthread_destroy(EXECUTOR_CLS, exec, 0);
-  pthread_exit(0);
-}
-
-int main(int argc, char **args) {
-  pthread_t servert, clientt;
-  pthread_create(&servert, 0, server, 0);
-  pthread_create(&clientt, 0, client, 0);
-
-  pthread_join(servert, 0);
-  pthread_join(clientt, 0);
 }
