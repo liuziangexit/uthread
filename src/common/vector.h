@@ -16,35 +16,69 @@
 #ifndef __UTHREAD_VECTOR_H__
 #define __UTHREAD_VECTOR_H__
 
+#include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
 
 struct uthread_vector {
   void *data;
   size_t capacity;
   size_t used;
+  size_t item_size;
+  void *(*alloc)(size_t);
+  void (*dealloc)(void *);
 };
 
-void uthread_vector_create() {}
+bool uthread_vector_init(uthread_vector *vec, size_t init_cap, size_t item_size,
+                         void *(*alloc)(size_t), void (*dealloc)(void *)) {
+  vec->data = alloc(init_cap * item_size);
+  if (!vec->data)
+    return false;
+  vec->capacity = init_cap;
+  vec->used = 0;
+  vec->item_size = item_size;
+  vec->alloc = alloc;
+  vec->dealloc = dealloc;
+  return true;
+}
 
-void uthread_vector_destroy() {}
+bool uthread_vector_add(uthread_vector *vec, void *item) {
+  if (vec->used == vec->capacity) {
+    // make more room
+    void *new_room =
+        vec->alloc(((size_t)(vec->capacity * 1.5)) * vec->item_size);
+    if (!new_room)
+      return false;
+    memcpy(new_room, vec->data, vec->used * vec->item_size);
+    vec->dealloc(vec->data);
+    vec->data = new_room;
+    vec->capacity *= 1.5;
+  }
+  memcpy(vec->data + (vec->used * vec->item_size), item, vec->item_size);
+  vec->used++;
+  return true;
+}
 
-void uthread_vector_add(uthread_vector *vec, void *item, size_t item_size) {}
+void uthread_vector_remove(uthread_vector *vec, size_t index) {
+#ifdef UTHREAD_DEBUG
+#endif
+  if (index != vec->used - 1) {
+    memcpy(vec->data + (index * vec->item_size),
+           vec->data + ((index + 1) * vec->item_size),
+           (vec->used - index - 1) * vec->item_size);
+  }
+  vec->used--;
+}
 
-void uthread_vector_insert(uthread_vector *vec, size_t index, void *item,
-                           size_t item_size) {}
+void uthread_vector_clear(uthread_vector *vec) {
+#ifdef UTHREAD_DEBUG
+#endif
+}
 
-void uthread_vector_remove(uthread_vector *vec, size_t index, void *item_out,
-                           size_t item_size) {}
-
-void uthread_vector_clear(uthread_vector *vec) {}
-
-void uthread_vector_get(uthread_vector *vec, size_t index, void *item_out,
-                        size_t item_size) {}
-
-void uthread_vector_reserve(uthread_vector *vec, size_t new_cap) {}
-
-void uthread_vector_shrink(uthread_vector *vec, size_t new_cap) {}
-
-size_t uthread_vector_size(uthread_vector *vec) { return 0; }
+void *uthread_vector_get(uthread_vector *vec, size_t index) {
+#ifdef UTHREAD_DEBUG
+#endif
+  return vec->data + (index * vec->item_size);
+}
 
 #endif
