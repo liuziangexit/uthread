@@ -16,6 +16,7 @@
 #ifndef __UTHREAD_VECTOR_H__
 #define __UTHREAD_VECTOR_H__
 
+#include "assert_helper.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
@@ -29,8 +30,9 @@ struct uthread_vector {
   void (*dealloc)(void *);
 };
 
-bool uthread_vector_init(uthread_vector *vec, size_t init_cap, size_t item_size,
-                         void *(*alloc)(size_t), void (*dealloc)(void *)) {
+bool uthread_vector_init(struct uthread_vector *vec, size_t init_cap,
+                         size_t item_size, void *(*alloc)(size_t),
+                         void (*dealloc)(void *)) {
   vec->data = alloc(init_cap * item_size);
   if (!vec->data)
     return false;
@@ -42,7 +44,14 @@ bool uthread_vector_init(uthread_vector *vec, size_t init_cap, size_t item_size,
   return true;
 }
 
-bool uthread_vector_add(uthread_vector *vec, void *item) {
+void uthread_vector_destroy(struct uthread_vector *vec) {
+  vec->dealloc(vec->data);
+  vec->data = 0;
+  vec->used = 0;
+  vec->capacity = 0;
+}
+
+bool uthread_vector_add(struct uthread_vector *vec, void *item) {
   if (vec->used == vec->capacity) {
     // make more room
     void *new_room =
@@ -59,8 +68,9 @@ bool uthread_vector_add(uthread_vector *vec, void *item) {
   return true;
 }
 
-void uthread_vector_remove(uthread_vector *vec, size_t index) {
+void uthread_vector_remove(struct uthread_vector *vec, size_t index) {
 #ifdef UTHREAD_DEBUG
+  UTHREAD_CHECK(index < vec->used, "index out of range");
 #endif
   if (index != vec->used - 1) {
     memcpy(vec->data + (index * vec->item_size),
@@ -70,15 +80,15 @@ void uthread_vector_remove(uthread_vector *vec, size_t index) {
   vec->used--;
 }
 
-void uthread_vector_clear(uthread_vector *vec) {
-#ifdef UTHREAD_DEBUG
-#endif
-}
+void uthread_vector_clear(struct uthread_vector *vec) { vec->used = 0; }
 
-void *uthread_vector_get(uthread_vector *vec, size_t index) {
+void *uthread_vector_get(struct uthread_vector *vec, size_t index) {
 #ifdef UTHREAD_DEBUG
+  UTHREAD_CHECK(index < vec->used, "index out of range");
 #endif
   return vec->data + (index * vec->item_size);
 }
+
+size_t uthread_vector_size(struct uthread_vector *vec) { return vec->used; }
 
 #endif
