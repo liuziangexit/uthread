@@ -117,10 +117,13 @@ void client(void *arg) {
 }
 
 int main(int argc, char **args) {
-  uthread_error err;
-  uthread_executor_t *exec = uthread_create(EXECUTOR_CLS, &err, 2, 0);
-  uthread_create(UTHREAD_CLS, &err, exec, server, 0);
-  uthread_create(UTHREAD_CLS, &err, exec, client, 0);
-  uthread_join(exec);
-  uthread_destroy(EXECUTOR_CLS, exec, 0);
+  struct uthread_executor_t exec;
+  if (uthread_executor_init(&exec, 0, 0) != OK) {
+    printf("create exec failed\n");
+    abort();
+  }
+  uthread_new(&exec, server, 0, 0);
+  uthread_new(&exec, client, 0, 0);
+  uthread_join(&exec);
+  uthread_executor_destroy(&exec);
 }

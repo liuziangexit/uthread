@@ -31,9 +31,8 @@ int main(int argc, char **args) {
   static const size_t CO_COUNT = 5;
   static const size_t CO_CAP = 5;
   assert(CO_CAP >= CO_COUNT);
-  uthread_error err;
-  uthread_executor_t *exec = uthread_create(EXECUTOR_CLS, &err, CO_CAP, 0);
-  if (!exec) {
+  struct uthread_executor_t exec;
+  if (uthread_executor_init(&exec, 0, 0) != OK) {
     printf("create exec failed\n");
     abort();
   }
@@ -41,14 +40,13 @@ int main(int argc, char **args) {
   size_t uthread_args[CO_COUNT];
   for (size_t i = 0; i < CO_COUNT; i++) {
     uthread_args[i] = i + 1;
-    uthread_create(UTHREAD_CLS, &err, exec, co, &uthread_args[i]);
-    if (err != OK)
+    if (uthread_new(&exec, co, &uthread_args[i], 0) != OK)
       abort();
   }
 
   int expect = CO_COUNT * 3;
-  uthread_join(exec);
-  uthread_destroy(EXECUTOR_CLS, exec, 0);
+  uthread_join(&exec);
+  uthread_executor_destroy(&exec);
   printf("count is %d(expect %d)\n", count, expect);
   printf("------------\nok\n");
   return 0;

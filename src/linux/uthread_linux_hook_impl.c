@@ -22,9 +22,12 @@
 #endif
 #include "../../include/uthread.h"
 #include "../common/assert_helper.h"
+#include "../common/vector.h"
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
@@ -45,11 +48,13 @@ static bool uimpl_epoll_init(uthread_executor_t *exec) {
   return true;
 }
 
-static void uimpl_epoll_add(int epoll, uthread_t *handle, int fd, int events) {
+_Static_assert(sizeof(size_t) == sizeof(uint64_t),
+               "assertion sizeof(size_t) == sizeof(uint64_t) failed");
+static void uimpl_epoll_add(int epoll, size_t uthread_idx, int fd, int events) {
   struct epoll_event ev;
   memset(&ev, 0, sizeof(struct epoll_event));
   ev.events = events;
-  ev.data.ptr = handle;
+  ev.data.u64 = (uint64_t)uthread_idx;
   UTHREAD_CHECK(epoll_ctl(epoll, EPOLL_CTL_ADD, fd, &ev) != -1,
                 "uimpl_epoll_add epoll_ctl failed");
 }
@@ -138,10 +143,10 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
     // 1. create epoll for the current executor if it doesn't exist
     UTHREAD_CHECK(uimpl_epoll_init(cur_exec), "can not create epoll");
     // 2. add listening socket into epoll's interest list
-    uimpl_epoll_add(cur_exec->epoll, &cur_exec->threads[cur_exec->current],
-                    sockfd, EPOLLIN);
+    uimpl_epoll_add(cur_exec->epoll, cur_exec->current, sockfd, EPOLLIN);
     // 3. switch to other uthread
-    uimpl_epoll_switch(cur_exec->epoll, &cur_exec->threads[cur_exec->current]);
+    uimpl_epoll_switch(cur_exec->epoll, uthread_vector_get(&cur_exec->threads,
+                                                           cur_exec->current));
     // 4. when the control flow goes back, remove the socket from epoll
     // interest list
     uimpl_epoll_del(cur_exec->epoll, sockfd);
@@ -177,8 +182,7 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
   // 1. create epoll for the current executor if it doesn't exist
   UTHREAD_CHECK(uimpl_epoll_init(cur_exec), "can not create epoll");
   // 2. add connecting socket into epoll's interest list
-  uimpl_epoll_add(cur_exec->epoll, &cur_exec->threads[cur_exec->current],
-                  sockfd, EPOLLOUT);
+  uimpl_epoll_add(cur_exec->epoll, cur_exec->current, sockfd, EPOLLOUT);
   // 3. set the fd to non-block mode
   bool nonblock = uimpl_set_nonblock(sockfd, true);
   // 4. call connect
@@ -187,7 +191,8 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
     return -1;
   }
   // 5. switch to other uthread
-  uimpl_epoll_switch(cur_exec->epoll, &cur_exec->threads[cur_exec->current]);
+  uimpl_epoll_switch(cur_exec->epoll,
+                     uthread_vector_get(&cur_exec->threads, cur_exec->current));
   // 6. when the control flow goes back, remove the socket from epoll interest
   // list
   uimpl_epoll_del(cur_exec->epoll, sockfd);

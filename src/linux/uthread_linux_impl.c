@@ -29,6 +29,7 @@
 
 #include "../../include/uthread.h"
 #include "../common/assert_helper.h"
+#include "../common/vector.h"
 #include "uthread_linux_impl_cur_ut.c"
 #include <stdint.h> //for int32_t etc...
 #include <stdlib.h> // malloc
@@ -41,19 +42,9 @@ static void uimpl_functor_wrapper(uint32_t low, uint32_t high) {
   UTHREAD_ABORT("uthread quit without calling uthread_exit");
 }
 
-uthread_executor_t *uimpl_exec(uthread_t *ut) {
-  void *vut = ut;
-  vut -= ut->idx * sizeof(uthread_t);
-  vut -= sizeof(uthread_executor_t);
-  return (uthread_executor_t *)vut;
-}
-
 uthread_t *uimpl_next(uthread_t *cur) {
-  uthread_executor_t *exec = uimpl_exec(cur);
-#ifdef UTHREAD_DEBUG
-  UTHREAD_CHECK(exec->current == cur->idx, "uimpl_next check failed");
-#endif
-  if (exec->stopped == exec->count - 1) {
+  uthread_executor_t *exec = cur->exec;
+  if (exec->stopped == exec->created - 1) {
     return 0;
   }
   // 1. check the threads that are pending on IO
@@ -67,17 +58,19 @@ uthread_t *uimpl_next(uthread_t *cur) {
     }
   }
   // 2. look for a thread that has been YIELDED
-  size_t next_idx = cur->idx + 1;
-  uthread_t *next = &exec->threads[next_idx++ % exec->count];
+  size_t next_idx = exec->current + 1;
+  uthread_t *next = uthread_vector_get(
+      &exec->threads, next_idx++ % uthread_vector_size(&exec->threads));
   while (next != cur && next->state != YIELDED && next->state != CREATED) {
-    next = &exec->threads[next_idx++ % exec->count];
+    next = uthread_vector_get(&exec->threads,
+                              next_idx++ % uthread_vector_size(&exec->threads));
   }
   if (next == cur)
     return 0; // not found
   return next;
 }
 
-void uimpl_switch(uthread_t *cur, uthread_t *to, uthread_state cur_state) {
+void uimpl_switch(size_t cur, size_t to, uthread_state cur_state) {
 #ifdef UTHREAD_DEBUG
   printf("[exec: %" PRIxPTR ", ut: %" PRIxPTR "]: switch to %" PRIxPTR "\n",
          (uintptr_t)uthread_current(EXECUTOR_CLS),
@@ -92,80 +85,85 @@ void uimpl_switch(uthread_t *cur, uthread_t *to, uthread_state cur_state) {
 #endif
   cur->state = cur_state;
   to->state = RUNNING;
-  uimpl_exec(cur)->current = to->idx;
+  cur->exec->current = to->idx;
   uimpl_set_cur_ut(to);
   if (swapcontext(&cur->ctx, &to->ctx) != 0) {
     UTHREAD_ABORT("uimpl_switch swapcontext failed");
   }
 }
 
-_Static_assert(_Alignof(uthread_executor_t) == _Alignof(uthread_t),
-               "the alignment requirement of uthread_executor_t and "
-               "uthread_t can not be matched");
-void *uthread_create(enum uthread_clsid clsid, enum uthread_error *err, ...) {
-  if (clsid == EXECUTOR_CLS) {
-    va_list args;
-    va_start(args, err);
-    size_t init_cap = va_arg(args, size_t);
-    void *(*alloc)(size_t) = va_arg(args, void *(*)(size_t));
-    va_end(args);
+uthread_error uthread_executor_init(struct uthread_executor_t *exec,
+                                    void *(*alloc)(size_t),
+                                    void (*dealloc)(void *)) {
+  // if custom allocator==0 use malloc
+  if (!alloc) {
+    alloc = malloc;
+    dealloc = free;
+  }
+  uthread_vector_init(exec->threads, 15, sizeof(uthread_t), alloc, dealloc);
+  uthread_vector_init(exec->threads_gaps, 15, sizeof(size_t), alloc, dealloc);
+  exec->created = 0;
+  exec->stopped = 0;
+  // epoll file descriptor set to -1 represent NULL
+  exec->epoll = -1;
+  return OK;
+}
 
-    // if custom allocator==0 use malloc
-    if (!alloc) {
-      alloc = malloc;
-    }
-    uthread_executor_t *new_exec =
-        alloc(sizeof(uthread_executor_t) + sizeof(uthread_t) * init_cap);
-    if (new_exec == 0) {
-      // memory allocation failed
-      *err = MEMORY_ALLOCATION_ERR;
-      return 0;
-    }
-    new_exec->threads = (uthread_t *)(new_exec + 1);
-    new_exec->count = 0;
-    new_exec->capacity = init_cap;
-    new_exec->stopped = 0;
-    // epoll file descriptor set to -1 represent NULL
-    new_exec->epoll = -1;
-    *err = OK;
-    return new_exec;
-  } else if (clsid == UTHREAD_CLS) {
-    va_list args;
-    va_start(args, err);
-    uthread_executor_t *exec = va_arg(args, uthread_executor_t *);
-    void (*job)(void *) = va_arg(args, void (*)(void *));
-    void *job_arg = va_arg(args, void *);
-    va_end(args);
+void uthread_executor_destroy(struct uthread_executor_t *exec) {
+  // 1.check all uthread are quited
+  UTHREAD_CHECK(exec->stopped == exec->created,
+                "some uthreads are not stopped yet");
 
-    if (exec->capacity == exec->count) {
-      *err = BAD_ARGUMENTS_ERR;
-      return 0;
-    }
-    uthread_t *new_thread = &exec->threads[exec->count];
-    new_thread->func = job;
-    new_thread->func_arg = job_arg;
-    new_thread->state = CREATED;
-    new_thread->idx = exec->count;
-    // create context
-    if (getcontext(&new_thread->ctx) != 0) {
-      *err = SYSTEM_CALL_ERR;
-      return 0;
-    }
-    // setup context stack
-    new_thread->ctx.uc_stack.ss_sp = &new_thread->stack;
-    new_thread->ctx.uc_stack.ss_size = sizeof(new_thread->stack);
-    new_thread->ctx.uc_link = 0;
-    // cxt will begin with job_func
-    makecontext(&new_thread->ctx, (void (*)())uimpl_functor_wrapper, 2,
-                (uint32_t)(uintptr_t)new_thread,
-                (uint32_t)((uintptr_t)new_thread >> 32));
-    exec->count++;
-    *err = OK;
-    return new_thread;
-  } else {
-    *err = BAD_ARGUMENTS_ERR;
+  if (exec->epoll >= 0) {
+    // 2.close epoll
+    close(exec->epoll);
+  }
+  // 3.destroy vectors
+  uthread_vector_destroy(&exec->threads);
+  uthread_vector_destroy(&exec->threads_gaps);
+}
+
+uthread_error uthread_new(struct uthread_executor_t *exec, void (*func)(void *),
+                          void *func_arg, size_t **idx_out) {
+  // 1.setting uthread_t
+  uthread_t new_thread;
+  new_thread->func = func;
+  new_thread->func_arg = func_arg;
+  new_thread->state = CREATED;
+  new_thread->exec = exec;
+  // create context
+  if (getcontext(&new_thread->ctx) != 0) {
+    *err = SYSTEM_CALL_ERR;
     return 0;
   }
+  // setup context stack
+  new_thread->ctx.uc_stack.ss_sp = &new_thread->stack;
+  new_thread->ctx.uc_stack.ss_size = sizeof(new_thread->stack);
+  new_thread->ctx.uc_link = 0;
+  // cxt will begin with job_func
+  makecontext(&new_thread->ctx, (void (*)())uimpl_functor_wrapper, 2,
+              (uint32_t)(uintptr_t)new_thread,
+              (uint32_t)((uintptr_t)new_thread >> 32));
+
+  size_t new_thread_idx;
+  // 2.check is there any gap inside uthread vector
+  if (uthread_vector_size(&exec->threads_gaps) != 0) {
+    // using gap
+    new_thread_idx = *(size_t *)uthread_vector_get(
+        &exec->threads_gaps, uthread_vector_size(&exec->threads_gaps) - 1);
+    uthread_vector_remove(&exec->threads_gaps,
+                          uthread_vector_size(&exec->threads_gaps) - 1);
+    memcpy(uthread_vector_get(&exec->uthreads, new_thread_idx), &new_thread,
+           sizeof(uthread_t));
+  } else {
+    // no gap
+    if (!uthread_vector_add(&exec->uthreads, &new_thread))
+      return MEMORY_ALLOCATION_ERR;
+  }
+  exec->created++;
+  if (idx_out)
+    *idx_out = new_thread_idx;
+  return OK;
 }
 
 enum uthread_error uthread_join(uthread_executor_t *exec) {
@@ -180,27 +178,6 @@ enum uthread_error uthread_join(uthread_executor_t *exec) {
   return OK;
 }
 
-void uthread_destroy(enum uthread_clsid clsid, void *obj,
-                     void (*dealloc)(void *)) {
-  if (clsid == EXECUTOR_CLS) {
-    uthread_executor_t *obj_typed = (uthread_executor_t *)obj;
-    // 1.check all uthread are quited
-    UTHREAD_CHECK(obj_typed->stopped == obj_typed->count,
-                  "some uthreads are not stopped yet");
-
-    if (obj_typed->epoll >= 0) {
-      // 2.close epoll
-      close(obj_typed->epoll);
-    }
-    // 3.free
-    if (dealloc == 0)
-      dealloc = free;
-    dealloc(obj);
-  } else {
-    UTHREAD_ABORT("uthread_destroy wrong clsid");
-  }
-}
-
 void uthread_switch(uthread_t *to) {
   uimpl_switch(uimpl_cur_ut(), to, YIELDED);
 }
@@ -213,8 +190,9 @@ void uthread_yield() {
 
 void uthread_exit() {
   uthread_t *cur = uimpl_cur_ut();
-  uthread_executor_t *exec = uimpl_exec(cur);
-  if (exec->count == exec->stopped + 1) {
+  uthread_executor_t *exec = cur->exec;
+  uthread_vector_add(&exec->uthreads_gaps, exec->current);
+  if (exec->created == exec->stopped + 1) {
     cur->state = STOPPED;
     exec->stopped++;
     UTHREAD_CHECK(uimpl_set_cur_ut(0), "uthread_exit uimpl_set_cur_ut failed");
@@ -232,7 +210,7 @@ void *uthread_current(uthread_clsid clsid) {
   } else if (clsid == EXECUTOR_CLS) {
     uthread_t *cur_ut = uimpl_cur_ut();
     if (cur_ut)
-      return uimpl_exec(cur_ut);
+      return cur_ut->exec;
     else
       return 0;
   } else {

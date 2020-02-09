@@ -28,15 +28,17 @@ extension)*/
 #include <ucontext.h>
 #undef _XOPEN_SOURCE
 #pragma pop_macro("_XOPEN_SOURCE")
+#include "../src/common/vector.h"
 #include <stddef.h> //size_t
 
 struct uthread_executor_t {
-  uthread_t *threads;
-  ucontext_t join_ctx;
+  struct uthread_vector threads;      // value=uthread_t
+  struct uthread_vector threads_gaps; // value=size_t
   size_t current;
-  size_t count;
-  size_t capacity;
-  size_t stopped;
+  // FIXME number overflow?
+  size_t created; // uthread_new count
+  size_t stopped; // uthread_exit count
+  ucontext_t join_ctx;
   int epoll;
 };
 
@@ -44,7 +46,7 @@ struct uthread_t {
   void (*func)(void *);
   void *func_arg;
   uthread_state state;
-  size_t idx;
+  uthread_executor_t *exec;
   ucontext_t ctx;
   unsigned char stack[1024 * 4]; // 4kb
 };

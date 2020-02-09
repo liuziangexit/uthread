@@ -53,24 +53,14 @@ typedef enum uthread_error {
 #error "not implemented"
 #endif
 
-/*
-Create various types of uthread object(listed in uthread_clsid).
-------------------------
-clsid: object type
-err: error code
+uthread_error uthread_executor_init(struct uthread_executor_t *exec,
+                                    void *(*alloc)(size_t),
+                                    void (*dealloc)(void *));
 
-when EXECUTOR_CLS is specified the variable arguments are...
-size_t: initial capacity
-void*(*)(size_t): custom memory allocator(if 0 use malloc)
+void uthread_executor_destroy(struct uthread_executor_t *exec);
 
-when UTHREAD_CLS is specified the variable arguments are...
-uthread_executor_t*: executor
-void(*)(void *): job
-void*: an pointer that will be passing into job
-------------------------
-return: created object if *error==OK otherwise 0
- */
-void *uthread_create(enum uthread_clsid clsid, enum uthread_error *err, ...);
+uthread_error uthread_new(struct uthread_executor_t *exec, void (*func)(void *),
+                          void *func_arg, size_t **idx_out);
 
 /*
 Run the specific executor.
@@ -82,19 +72,6 @@ exec: executor to run
 return: OK|SYSTEM_CALL_ERR
 */
 enum uthread_error uthread_join(uthread_executor_t *exec);
-
-/*
-Destory object created by uthread_create.
-------------------------
-clsid: object type
-obj: object to be destory
-dealloc: if obj was created by a custom alloc then we need a corresponding
-dealloc otherwise passing 0
-------------------------
-return: none
- */
-void uthread_destroy(enum uthread_clsid clsid, void *obj,
-                     void (*dealloc)(void *));
 
 /*
 Yield the current control flow to specified uthread.
