@@ -61,9 +61,6 @@ target_link_libraries(uthread_hook dl)
 set_target_properties(uthread_hook PROPERTIES LIBRARY_OUTPUT_DIRECTORY build/lib)
 
 #build test
-add_executable(test_vector test/vector.c)
-set_target_properties(test_vector PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
-
 add_executable(test_yield test/yield.c)
 target_link_libraries(test_yield uthread)
 set_target_properties(test_yield PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
