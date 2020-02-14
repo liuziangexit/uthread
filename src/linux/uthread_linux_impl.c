@@ -65,21 +65,18 @@ static void uimpl_wrapper(uint32_t low, uint32_t high) {
   UTHREAD_ABORT("uthread quit without calling uthread_exit");
 }
 
-static struct uthread_t *uimpl_threadp(struct uthread_executor_t *exec,
-                                       uthread_id_t id) {
+struct uthread_t *uimpl_threadp(struct uthread_executor_t *exec,
+                                uthread_id_t id) {
   UTHREAD_CHECK(id != UTHREAD_INVALID_ID, "uimpl_threadp check failed");
   return (struct uthread_t *)uthread_vector_get(&exec->threads, id);
 }
 
-static bool uimpl_switch_to(struct uthread_executor_t *exec,
-                            struct uthread_t *thread,
-                            enum uthread_state prev_state) {
+bool uimpl_switch_to(struct uthread_executor_t *exec, struct uthread_t *thread,
+                     enum uthread_state prev_state) {
   // log支持格式化字符串
   fprintf(stdout, "switch from %zu to %zu\n", exec->current_thread, thread->id);
   UTHREAD_CHECK(thread->exec == exec, "uimpl_switch_to check failed");
   if (exec->current_thread == thread->id) {
-    uthread_warn(stdout,
-                 "uimpl_switch_to switch to the current running thread");
     return true;
   }
   if (exec->current_thread != UTHREAD_INVALID_ID) {
@@ -102,7 +99,7 @@ static bool uimpl_switch_to(struct uthread_executor_t *exec,
   return true;
 }
 
-struct uthread_t *uimpl_next(struct uthread_executor_t *exec) {
+struct uthread_t *uimpl_next(struct uthread_executor_t *exec, bool allow_back) {
   // 1. check the threads that are pending on IO
   if (exec->epoll >= 0) {
     struct epoll_event ev;
@@ -112,23 +109,33 @@ struct uthread_t *uimpl_next(struct uthread_executor_t *exec) {
       UTHREAD_ABORT("epoll_wait failed");
     }
     if (ev_cnt == 1) {
-      // TODO
-      // return ev.data.u32;
+      return uimpl_threadp(exec, (uthread_id_t)ev.data.u64);
     }
   }
   // 2. look for a thread that has been YIELDED
   uthread_id_t next_idx = exec->current_thread + 1;
-  struct uthread_t *next = (struct uthread_t *)uthread_vector_get(
-      &exec->threads, next_idx++ % uthread_vector_size(&exec->threads));
+  struct uthread_t *next =
+      uimpl_threadp(exec, next_idx++ % uthread_vector_size(&exec->threads));
   while (next->id != exec->current_thread &&
          !uimpl_has_flag(next->state, UTHREAD_FLAG_SCHEDULABLE)) {
-    next = (struct uthread_t *)uthread_vector_get(
-        &exec->threads, next_idx++ % uthread_vector_size(&exec->threads));
+    next =
+        uimpl_threadp(exec, next_idx++ % uthread_vector_size(&exec->threads));
   }
   if (next->id != exec->current_thread)
     return next;
+  if (allow_back)
+    return uimpl_threadp(exec, exec->current_thread);
   // 3.waiting on epoll
-  return 0;
+  if (exec->epoll >= 0) {
+    struct epoll_event ev;
+    // this call will block
+    int ev_cnt = epoll_wait(exec->epoll, &ev, 1, -1);
+    if (ev_cnt != 1) {
+      UTHREAD_ABORT("epoll_wait failed");
+    }
+    return uimpl_threadp(exec, (uthread_id_t)ev.data.u64);
+  }
+  UTHREAD_ABORT("illegal state")
 }
 // END internal functions
 
@@ -166,8 +173,7 @@ uthread_id_t uthread(struct uthread_executor_t *exec, void (*job)(void *),
   size_t new_thread_idx = exec->threads.used;
   // search for STOPPED uthread and take its place
   for (size_t i = 0; i < exec->threads.used; i++) {
-    struct uthread_t *slot =
-        (struct uthread_t *)uthread_vector_get(&exec->threads, i);
+    struct uthread_t *slot = uimpl_threadp(exec, i);
     if (slot->state == STOPPED) {
       new_thread_idx = i;
       break;
@@ -182,8 +188,7 @@ uthread_id_t uthread(struct uthread_executor_t *exec, void (*job)(void *),
     }
   }
   // initial uthread
-  struct uthread_t *new_thread =
-      (struct uthread_t *)uthread_vector_get(&exec->threads, new_thread_idx);
+  struct uthread_t *new_thread = uimpl_threadp(exec, new_thread_idx);
   new_thread->job = job;
   new_thread->job_arg = job_arg;
   new_thread->state = CREATED;
@@ -209,9 +214,7 @@ uthread_id_t uthread(struct uthread_executor_t *exec, void (*job)(void *),
 
 enum uthread_error uthread_join(struct uthread_executor_t *exec) {
   if (exec->schedulable_cnt > 0) {
-    if (!uimpl_switch_to(
-            exec, (struct uthread_t *)uthread_vector_get(&exec->threads, 0),
-            0)) {
+    if (!uimpl_switch_to(exec, uimpl_threadp(exec, 0), 0)) {
       return SYSTEM_CALL_FAILED;
     }
   }
@@ -220,24 +223,21 @@ enum uthread_error uthread_join(struct uthread_executor_t *exec) {
 
 void uthread_yield() {
   struct uthread_executor_t *exec = uthread_current_executor();
-  struct uthread_t *next = uimpl_next(exec);
-  if (next) {
-    if (!uimpl_switch_to(exec, next, YIELDED))
-      UTHREAD_ABORT("uthread_yield failed");
-  }
+  struct uthread_t *next = uimpl_next(exec, true);
+  UTHREAD_CHECK(next, "uthread_yield failed");
+  if (!uimpl_switch_to(exec, next, YIELDED))
+    UTHREAD_ABORT("uthread_yield failed");
 }
 
 void uthread_exit() {
   struct uthread_executor_t *exec = uthread_current_executor();
   if (exec->schedulable_cnt == 1) {
-    ((struct uthread_t *)uthread_vector_get(&exec->threads,
-                                            exec->current_thread))
-        ->state = STOPPED;
+    uimpl_threadp(exec, exec->current_thread)->state = STOPPED;
     exec->schedulable_cnt--;
     uimpl_set_current(0);
     setcontext(&exec->join_ctx);
   } else {
-    struct uthread_t *next = uimpl_next(exec);
+    struct uthread_t *next = uimpl_next(exec, false);
     UTHREAD_CHECK(next, "uthread_exit failed");
     exec->schedulable_cnt--;
     uimpl_switch_to(exec, next, STOPPED);

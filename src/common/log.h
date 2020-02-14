@@ -17,7 +17,8 @@
 #define __UTHREAD_LOG_H__
 #include <stdio.h>
 
-//TODO 支持传格式化字符串和参数进来
+// TODO
+// 支持传格式化字符串和参数进来，并且目前似乎文件和行数显示的都不对，只能用宏了
 
 void uthread_info(FILE *fp, const char *msg) {
 #ifdef UTHREAD_DEBUG

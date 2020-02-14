@@ -118,12 +118,12 @@ void client(void *arg) {
 
 int main(int argc, char **args) {
   struct uthread_executor_t exec;
-  if (uthread_executor_init(&exec, 0, 0) != OK) {
+  if (uthread_executor(&exec, 0, 0) != OK) {
     printf("create exec failed\n");
     abort();
   }
-  uthread_new(&exec, server, 0, 0);
-  uthread_new(&exec, client, 0, 0);
+  uthread(&exec, server, 0, 0);
+  uthread(&exec, client, 0, 0);
   uthread_join(&exec);
   uthread_executor_destroy(&exec);
 }

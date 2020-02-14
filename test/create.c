@@ -12,20 +12,20 @@ void co(void *arg) {
   while (!quit_flag) {
     printf("**********\n线程%zu已被调入，共计调入%"
            "d次\n输入1创建新线程，输入2退出当前线程，输入其他进行调度\n",
-           uthread_current_thread()->id, count);
+           uthread_current_thread()->id + 1, count);
     int choice = getc(stdin);
     if (choice == '1') {
       uthread_id_t id = uthread(&exec, co, 0, &err);
-      printf("新线程%zu已创建\n", id);
+      printf("新线程%zu已创建\n", id + 1);
     } else if (choice == '2') {
-      printf("线程%zu已退出\n", uthread_current_thread()->id);
+      printf("线程%zu已退出\n", uthread_current_thread()->id + 1);
       uthread_exit();
     } else {
       count++;
       uthread_yield();
     }
   }
-  printf("线程%zu已退出\n", uthread_current_thread()->id);
+  printf("线程%zu已退出\n", uthread_current_thread()->id + 1);
   uthread_exit();
 }
 
