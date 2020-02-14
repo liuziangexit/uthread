@@ -78,6 +78,16 @@ endif()
 target_link_libraries(test_yield uthread)
 set_target_properties(test_yield PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
 
+add_executable(test_create test/create.c)
+if(UTHREAD_DEBUG)
+    target_compile_definitions(test_create PRIVATE UTHREAD_DEBUG)
+else()
+    target_compile_definitions(test_create PRIVATE NDEBUG)
+endif()
+target_link_libraries(test_create uthread)
+set_target_properties(test_create PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
+
+
 # add_executable(test_tcp test/tcp.c)
 # if(UTHREAD_ENABLE_HOOK)
 #     target_link_libraries(test_tcp uthread_hook)
