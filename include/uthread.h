@@ -15,97 +15,70 @@
 
 #ifndef __UTHREAD_H__
 #define __UTHREAD_H__
-#include <stdarg.h>
-#include <stddef.h> //for size_t
+#include <stdbool.h>
+#include <stddef.h> //size_t
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct uthread_executor_t uthread_executor_t;
-// uthread_t always have: uthread_executor_t *exec; uthread_state state;
-typedef struct uthread_t uthread_t;
-typedef enum uthread_state {
-  CREATED,
-  WAITING_SIGNAL, // waiting for a condition/monitor lock
-  WAITING_IO,     // waiting for an IO operation
-  YIELDED,        // uthread_yield has just been called
-  RUNNING,
-  STOPPED
-} uthread_state;
+#define UTHREAD_FLAG_SCHEDULABLE 4096 // available to resume
+#define UTHREAD_FLAG_WAITING 8192     // waiting for something
+enum uthread_state {
+  CREATED = UTHREAD_FLAG_SCHEDULABLE + 1, //
+  YIELDED = UTHREAD_FLAG_SCHEDULABLE + 2, //
+  WAITING_IO = UTHREAD_FLAG_WAITING + 1,  //
+  RUNNING = 1,                            //
+  STOPPED = 0
+};
 
-typedef enum uthread_clsid {
-  EXECUTOR_CLS, // uthread_executor_t
-  UTHREAD_CLS   // uthread_t
-} uthread_clsid;
+struct uthread_executor_t;
+struct uthread_t;
 
-typedef enum uthread_error {
-  OK,
-  BAD_ARGUMENTS_ERR,
-  MEMORY_ALLOCATION_ERR,
-  SYSTEM_CALL_ERR
-} uthread_error;
-
-// type definition
 #ifdef __linux__
-#include "uthread_linux_def.h"
+#include "../src/common/vector.h"
+#include <stdint.h> // SIZE_MAX
+#include <ucontext.h>
+typedef size_t uthread_id_t;
+uthread_id_t UTHREAD_INVALID_ID = SIZE_MAX;
+struct uthread_executor_t {
+  struct uthread_vector threads;
+  uthread_id_t current_thread;
+  size_t schedulable_cnt;
+  int epoll;
+  struct ucontext_t join_ctx;
+};
+struct uthread_t {
+  void (*job)(void *);
+  void *job_arg;
+  enum uthread_state state;
+  struct uthread_executor_t *exec;
+  uthread_id_t id;
+  struct ucontext_t ctx;
+  unsigned char stack[1024 * 4];
+};
 #else
 #error "not implemented"
 #endif
 
-uthread_error uthread_executor_init(struct uthread_executor_t *exec,
+enum uthread_error {
+  OK,
+  BAD_ARGUMENT,
+  MEMORY_ALLOCATION_FAILED,
+  SYSTEM_CALL_FAILED
+};
+
+enum uthread_error uthread_executor(struct uthread_executor_t *exec,
                                     void *(*alloc)(size_t),
                                     void (*dealloc)(void *));
-
 void uthread_executor_destroy(struct uthread_executor_t *exec);
-
-uthread_error uthread_new(struct uthread_executor_t *exec, void (*func)(void *),
-                          void *func_arg, size_t **idx_out);
-
-/*
-Run the specific executor.
-This function will block until all the uthreads inside the executor has been
-exited.
-------------------------
-exec: executor to run
-------------------------
-return: OK|SYSTEM_CALL_ERR
-*/
-enum uthread_error uthread_join(uthread_executor_t *exec);
-
-/*
-Yield the current control flow to specified uthread.
-------------------------
-to: thread to switch
-------------------------
-return: none
- */
-void uthread_switch(uthread_t *to);
-
-/*
-Yield the current control flow to unspecified uthread.
-------------------------
-------------------------
-return: none
- */
+uthread_id_t uthread(struct uthread_executor_t *exec, void (*job)(void *),
+                     void *job_arg, enum uthread_error *err);
+enum uthread_error uthread_join(struct uthread_executor_t *exec);
 void uthread_yield();
-
-/*
-Causes the calling uthread to exit.
-------------------------
-------------------------
-return: none
- */
 void uthread_exit();
-
-/*
-retrieve current uthread or executor
-------------------------
-clsid: EXECUTOR_CLS | UTHREAD_CLS
-------------------------
-return: pointer to required object if there is, otherwise 0
- */
-void *uthread_current(uthread_clsid clsid);
+struct uthread_executor_t *uthread_current_executor();
+struct uthread_t *uthread_current_thread();
 
 #ifdef __cplusplus
 }

@@ -15,9 +15,8 @@
 
 #ifndef __UTHREAD_ASSERT_HELPER_H__
 #define __UTHREAD_ASSERT_HELPER_H__
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "log.h"
+#include <stdlib.h> //abort
 
 /*
 注意，在这里不使用stderr的原因是，stderr是所谓“unbuffered”模式的，
@@ -27,16 +26,22 @@
 出于这样的考虑，我们使用stdout
  */
 
-#define UTHREAD_CHECK(v, msg)                                                  \
-  if (!(v)) {                                                                  \
-    fprintf(stdout, "%s\n", (const char *)msg);                                \
+#define UTHREAD_ABORT(msg)                                                     \
+  {                                                                            \
+    uthread_fault(stdout, msg);                                                \
     abort();                                                                   \
   }
 
-#define UTHREAD_ABORT(msg)                                                     \
-  {                                                                            \
-    fprintf(stdout, "%s\n", (const char *)msg);                                \
+#ifdef UTHREAD_DEBUG
+#define UTHREAD_CHECK(v, msg)                                                  \
+  if (!(v)) {                                                                  \
+    uthread_fault(stdout, msg);                                                \
     abort();                                                                   \
   }
+#else
+#define UTHREAD_CHECK(v, msg)                                                  \
+  if (v) {                                                                     \
+  }
+#endif
 
 #endif

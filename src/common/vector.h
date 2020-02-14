@@ -51,27 +51,42 @@ void uthread_vector_destroy(struct uthread_vector *vec) {
   vec->capacity = 0;
 }
 
+bool uthread_vector_reserve(struct uthread_vector *vec, size_t new_cap) {
+  if (vec->capacity >= new_cap) {
+    return true;
+  }
+  void *new_room = vec->alloc(new_cap * vec->item_size);
+  if (!new_room) {
+    return false;
+  }
+  memcpy(new_room, vec->data, vec->used * vec->item_size);
+  vec->dealloc(vec->data);
+  vec->data = new_room;
+  vec->capacity = new_cap;
+  return true;
+}
+
 bool uthread_vector_add(struct uthread_vector *vec, void *item) {
   if (vec->used == vec->capacity) {
-    // make more room
-    void *new_room =
-        vec->alloc(((size_t)(vec->capacity * 1.5)) * vec->item_size);
-    if (!new_room)
+    if (!uthread_vector_reserve(vec, vec->capacity * 1.5))
       return false;
-    memcpy(new_room, vec->data, vec->used * vec->item_size);
-    vec->dealloc(vec->data);
-    vec->data = new_room;
-    vec->capacity *= 1.5;
   }
   memcpy(vec->data + (vec->used * vec->item_size), item, vec->item_size);
   vec->used++;
   return true;
 }
 
+bool uthread_vector_expand(struct uthread_vector *vec, size_t cnt) {
+  if (vec->used + cnt > vec->capacity) {
+    if (!uthread_vector_reserve(vec, vec->used + cnt))
+      return false;
+  }
+  vec->used += cnt;
+  return true;
+}
+
 void uthread_vector_remove(struct uthread_vector *vec, size_t index) {
-#ifdef UTHREAD_DEBUG
   UTHREAD_CHECK(index < vec->used, "index out of range");
-#endif
   if (index != vec->used - 1) {
     memcpy(vec->data + (index * vec->item_size),
            vec->data + ((index + 1) * vec->item_size),
@@ -83,9 +98,7 @@ void uthread_vector_remove(struct uthread_vector *vec, size_t index) {
 void uthread_vector_clear(struct uthread_vector *vec) { vec->used = 0; }
 
 void *uthread_vector_get(struct uthread_vector *vec, size_t index) {
-#ifdef UTHREAD_DEBUG
   UTHREAD_CHECK(index < vec->used, "index out of range");
-#endif
   return vec->data + (index * vec->item_size);
 }
 
