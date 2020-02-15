@@ -58,9 +58,9 @@ static inline bool uimpl_has_flag(enum uthread_state state, int flag) {
   return state & flag;
 }
 
-static void uimpl_wrapper(uint32_t low, uint32_t high) {
-  struct uthread_t *thread =
-      (struct uthread_t *)((uintptr_t)low | ((uintptr_t)high << 32));
+static void uimpl_wrapper() {
+  struct uthread_t *thread = uimpl_current();
+  printf("uimpl_wrapper %zu\n", thread->id);
   thread->job(thread->job_arg);
   UTHREAD_ABORT("uthread quit without calling uthread_exit");
 }
@@ -195,6 +195,7 @@ uthread_id_t uthread(struct uthread_executor_t *exec, void (*job)(void *),
   new_thread->exec = exec;
   new_thread->id = new_thread_idx;
   if (getcontext(&new_thread->ctx) != 0) {
+    new_thread->state = STOPPED;
     if (err)
       *err = SYSTEM_CALL_FAILED;
     return UTHREAD_INVALID_ID;
@@ -202,9 +203,7 @@ uthread_id_t uthread(struct uthread_executor_t *exec, void (*job)(void *),
   new_thread->ctx.uc_stack.ss_sp = &new_thread->stack;
   new_thread->ctx.uc_stack.ss_size = sizeof(new_thread->stack);
   new_thread->ctx.uc_link = 0;
-  makecontext(&new_thread->ctx, (void (*)())uimpl_wrapper, 2,
-              (uint32_t)(uintptr_t)new_thread,
-              (uint32_t)((uintptr_t)new_thread >> 32));
+  makecontext(&new_thread->ctx, uimpl_wrapper, 0);
   // ok
   exec->schedulable_cnt++;
   if (err)

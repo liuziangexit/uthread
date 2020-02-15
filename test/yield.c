@@ -28,22 +28,22 @@ void co(void *arg) {
 
 int main(int argc, char **args) {
   printf("go\n------------\n");
-  static const size_t CO_COUNT = 5;
-  static const size_t CO_CAP = 5;
-  assert(CO_CAP >= CO_COUNT);
+  static const size_t CO_COUNT = 300;
   struct uthread_executor_t exec;
   if (uthread_executor(&exec, 0, 0) != OK) {
     printf("create exec failed\n");
     abort();
   }
-
   size_t uthread_args[CO_COUNT];
   for (size_t i = 0; i < CO_COUNT; i++) {
     uthread_args[i] = i + 1;
     enum uthread_error err;
     uthread(&exec, co, &uthread_args[i], &err);
+    if (err != OK) {
+      printf("uthread failed\n");
+      abort();
+    }
   }
-
   int expect = CO_COUNT * 3;
   enum uthread_error err = uthread_join(&exec);
   if (err != OK) {

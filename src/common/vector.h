@@ -33,6 +33,8 @@ struct uthread_vector {
 bool uthread_vector_init(struct uthread_vector *vec, size_t init_cap,
                          size_t item_size, void *(*alloc)(size_t),
                          void (*dealloc)(void *)) {
+  if (init_cap <= 1)
+    init_cap = 15;
   vec->data = alloc(init_cap * item_size);
   if (!vec->data)
     return false;
@@ -52,6 +54,7 @@ void uthread_vector_destroy(struct uthread_vector *vec) {
 }
 
 bool uthread_vector_reserve(struct uthread_vector *vec, size_t new_cap) {
+  printf("reserve from %zu to %zu\n", vec->capacity, new_cap);
   if (vec->capacity >= new_cap) {
     return true;
   }
@@ -78,7 +81,11 @@ bool uthread_vector_add(struct uthread_vector *vec, void *item) {
 
 bool uthread_vector_expand(struct uthread_vector *vec, size_t cnt) {
   if (vec->used + cnt > vec->capacity) {
-    if (!uthread_vector_reserve(vec, vec->used + cnt))
+    size_t new_cap = vec->capacity * 1.5;
+    while (vec->used + cnt > new_cap) {
+      new_cap *= 1.5;
+    }
+    if (!uthread_vector_reserve(vec, new_cap))
       return false;
   }
   vec->used += cnt;
