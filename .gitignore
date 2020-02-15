@@ -354,3 +354,4 @@ CMakeCache.txt
 Makefile
 gmon.out
 .vscode/settings.json
+vgcore.*

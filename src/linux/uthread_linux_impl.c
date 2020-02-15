@@ -85,14 +85,14 @@ bool uimpl_switch_to(struct uthread_executor_t *exec, struct uthread_t *thread,
     thread->state = RUNNING;
     exec->current_thread = thread->id;
     uimpl_set_current(thread);
-    if (swapcontext(&prev->ctx, &thread->ctx) != 0) {
+    if (swapcontext(&prev->context->uctx, &thread->context->uctx) != 0) {
       return false;
     }
   } else {
     thread->state = RUNNING;
     exec->current_thread = thread->id;
     uimpl_set_current(thread);
-    if (swapcontext(&exec->join_ctx, &thread->ctx) != 0) {
+    if (swapcontext(&exec->join_ctx->uctx, &thread->context->uctx) != 0) {
       return false;
     }
   }
@@ -148,8 +148,19 @@ enum uthread_error uthread_executor(struct uthread_executor_t *exec,
     dealloc = free;
   }
   if (!uthread_vector_init(&exec->threads, 15, sizeof(struct uthread_t), alloc,
-                           dealloc))
+                           dealloc)) {
     return MEMORY_ALLOCATION_FAILED;
+  }
+  // setup join context
+  exec->join_ctx = alloc(sizeof(struct uthread_linux_context_t));
+  if (!exec->join_ctx) {
+    uthread_vector_destroy(&exec->threads);
+    return MEMORY_ALLOCATION_FAILED;
+  }
+  exec->join_ctx->uctx.uc_stack.ss_sp = &exec->join_ctx->stack;
+  exec->join_ctx->uctx.uc_stack.ss_size = UTHREAD_STACK_SIZE;
+  exec->join_ctx->uctx.uc_link = 0;
+  //...
   exec->current_thread = UTHREAD_INVALID_ID;
   exec->schedulable_cnt = 0;
   exec->epoll = -1;
@@ -164,8 +175,16 @@ void uthread_executor_destroy(struct uthread_executor_t *exec) {
   if (exec->epoll >= 0) {
     close(exec->epoll);
   }
-  // 3.free vector
+  // 3.free uthread's context
+  for (size_t i = 0; i < uthread_vector_size(&exec->threads); i++) {
+    struct uthread_t *t =
+        (struct uthread_t *)uthread_vector_get(&exec->threads, i);
+    exec->threads.dealloc(t->context);
+  }
+  // 4.free vector
   uthread_vector_destroy(&exec->threads);
+  // 5.free context
+  exec->threads.dealloc(exec->join_ctx);
 }
 
 uthread_id_t uthread(struct uthread_executor_t *exec, void (*job)(void *),
@@ -181,10 +200,23 @@ uthread_id_t uthread(struct uthread_executor_t *exec, void (*job)(void *),
   }
   // if there is no STOPPED uthread then we add new place
   if (new_thread_idx == exec->threads.used) {
+    void *prev_data = exec->threads.data;
     if (!uthread_vector_expand(&exec->threads, 1)) {
       if (err)
         *err = MEMORY_ALLOCATION_FAILED;
       return UTHREAD_INVALID_ID;
+    }
+    // mark expanded space -> context to 0
+    ((struct uthread_t *)uthread_vector_get(
+         &exec->threads, uthread_vector_size(&exec->threads) - 1))
+        ->context = 0;
+    // vector internal storage has been realloced
+    if (prev_data != exec->threads.data) {
+      printf("update triggered by vector resize\n");
+      // we need to update current uthread pointer
+      if (uimpl_current()) {
+        uimpl_set_current(uimpl_threadp(exec, exec->current_thread));
+      }
     }
   }
   // initial uthread
@@ -194,16 +226,27 @@ uthread_id_t uthread(struct uthread_executor_t *exec, void (*job)(void *),
   new_thread->state = CREATED;
   new_thread->exec = exec;
   new_thread->id = new_thread_idx;
-  if (getcontext(&new_thread->ctx) != 0) {
+  // set up context
+  if (!new_thread->context) {
+    new_thread->context =
+        exec->threads.alloc(sizeof(struct uthread_linux_context_t));
+    if (!new_thread->context) {
+      new_thread->state = STOPPED;
+      if (err)
+        *err = MEMORY_ALLOCATION_FAILED;
+      return UTHREAD_INVALID_ID;
+    }
+  }
+  if (getcontext(&new_thread->context->uctx) != 0) {
     new_thread->state = STOPPED;
     if (err)
       *err = SYSTEM_CALL_FAILED;
     return UTHREAD_INVALID_ID;
   }
-  new_thread->ctx.uc_stack.ss_sp = &new_thread->stack;
-  new_thread->ctx.uc_stack.ss_size = sizeof(new_thread->stack);
-  new_thread->ctx.uc_link = 0;
-  makecontext(&new_thread->ctx, uimpl_wrapper, 0);
+  new_thread->context->uctx.uc_stack.ss_sp = &new_thread->context->stack;
+  new_thread->context->uctx.uc_stack.ss_size = UTHREAD_STACK_SIZE;
+  new_thread->context->uctx.uc_link = 0;
+  makecontext(&new_thread->context->uctx, uimpl_wrapper, 0);
   // ok
   exec->schedulable_cnt++;
   if (err)
@@ -234,7 +277,7 @@ void uthread_exit() {
     uimpl_threadp(exec, exec->current_thread)->state = STOPPED;
     exec->schedulable_cnt--;
     uimpl_set_current(0);
-    setcontext(&exec->join_ctx);
+    setcontext(&exec->join_ctx->uctx);
   } else {
     struct uthread_t *next = uimpl_next(exec, false);
     UTHREAD_CHECK(next, "uthread_exit failed");

@@ -36,6 +36,7 @@ struct uthread_executor_t;
 struct uthread_t;
 
 #ifdef __linux__
+#define UTHREAD_STACK_SIZE 1024 * 4
 #include "../src/common/vector.h"
 #include <stdint.h> // SIZE_MAX
 #include <ucontext.h>
@@ -43,19 +44,23 @@ typedef size_t uthread_id_t;
 uthread_id_t UTHREAD_INVALID_ID = SIZE_MAX;
 struct uthread_executor_t {
   struct uthread_vector threads;
+  struct uthread_linux_context_t *join_ctx;
   uthread_id_t current_thread;
   size_t schedulable_cnt;
   int epoll;
-  struct ucontext_t join_ctx;
 };
+struct uthread_linux_context_t;
 struct uthread_t {
   void (*job)(void *);
   void *job_arg;
   enum uthread_state state;
   struct uthread_executor_t *exec;
   uthread_id_t id;
-  struct ucontext_t ctx;
-  unsigned char stack[1024 * 4];
+  struct uthread_linux_context_t *context;
+};
+struct uthread_linux_context_t {
+  struct ucontext_t uctx;
+  unsigned char stack[UTHREAD_STACK_SIZE];
 };
 #else
 #error "not implemented"

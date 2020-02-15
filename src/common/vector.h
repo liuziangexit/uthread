@@ -47,6 +47,9 @@ bool uthread_vector_init(struct uthread_vector *vec, size_t init_cap,
 }
 
 void uthread_vector_destroy(struct uthread_vector *vec) {
+#ifdef UTHREAD_DEBUG
+  memset(vec->data, 0, vec->capacity * vec->item_size);
+#endif
   vec->dealloc(vec->data);
   vec->data = 0;
   vec->used = 0;
@@ -63,6 +66,9 @@ bool uthread_vector_reserve(struct uthread_vector *vec, size_t new_cap) {
     return false;
   }
   memcpy(new_room, vec->data, vec->used * vec->item_size);
+#ifdef UTHREAD_DEBUG
+  memset(vec->data, 0, vec->capacity * vec->item_size);
+#endif
   vec->dealloc(vec->data);
   vec->data = new_room;
   vec->capacity = new_cap;
