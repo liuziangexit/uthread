@@ -13,8 +13,7 @@
  * the License.
  */
 
-#ifndef _WIN32
-#include "sysv/uthread_sysv_impl.c"
+#ifdef __linux__
+#include "linux/uthread_linux_impl.c"
 #else
-#include "nt/uthread_impl.c"
 #endif

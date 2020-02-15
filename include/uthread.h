@@ -15,51 +15,75 @@
 
 #ifndef __UTHREAD_H__
 #define __UTHREAD_H__
-#include <stddef.h> //for size_t
+#include <stdbool.h>
+#include <stddef.h> //size_t
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct uthread_executor_t uthread_executor_t;
-// uthread_t always have: uthread_executor_t *exec; uthread_state state;
-typedef struct uthread_t uthread_t;
-typedef enum uthread_state {
-  CREATED,
-  WAITING_SIGNAL, // waiting for a condition/monitor lock
-  WAITING_IO,     // waiting for an IO operation
-  YIELDED,        // uthread_yield has just been called
-  RUNNING,
-  STOPPED,
-  ABORTED
-} uthread_state;
+#define UTHREAD_FLAG_SCHEDULABLE 4096 // available to resume
+#define UTHREAD_FLAG_WAITING 8192     // waiting for something
+enum uthread_state {
+  CREATED = UTHREAD_FLAG_SCHEDULABLE + 1, //
+  YIELDED = UTHREAD_FLAG_SCHEDULABLE + 2, //
+  WAITING_IO = UTHREAD_FLAG_WAITING + 1,  //
+  RUNNING = 1,                            //
+  STOPPED = 0
+};
 
-#ifndef _WIN32
-#include "uthread_sysv_def.h"
+struct uthread_executor_t;
+struct uthread_t;
+
+#ifdef __linux__
+#define UTHREAD_STACK_SIZE 1024 * 4
+#include "../src/common/vector.h"
+#include <stdint.h> // SIZE_MAX
+#include <ucontext.h>
+typedef size_t uthread_id_t;
+uthread_id_t UTHREAD_INVALID_ID = SIZE_MAX;
+struct uthread_executor_t {
+  struct uthread_vector threads;
+  struct uthread_linux_context_t *join_ctx;
+  uthread_id_t current_thread;
+  size_t schedulable_cnt;
+  int epoll;
+};
+struct uthread_linux_context_t;
+struct uthread_t {
+  void (*job)(void *);
+  void *job_arg;
+  enum uthread_state state;
+  struct uthread_executor_t *exec;
+  uthread_id_t id;
+  struct uthread_linux_context_t *context;
+};
+struct uthread_linux_context_t {
+  struct ucontext_t uctx;
+  unsigned char stack[UTHREAD_STACK_SIZE];
+};
 #else
 #error "not implemented"
 #endif
 
-// create an executor
-uthread_executor_t *uthread_exec_create(size_t capacity);
+enum uthread_error {
+  OK,
+  BAD_ARGUMENT,
+  MEMORY_ALLOCATION_FAILED,
+  SYSTEM_CALL_FAILED
+};
 
-// create an uthread under specific executor
-int uthread_create(uthread_executor_t *exec,
-                   void (*func)(uthread_t *handle, void *), void *func_arg);
-
-// causes uthreads under the executor to be executed
-// the call will be blocked until all the uthreads exit or abort
-void uthread_exec_join(uthread_executor_t *exec);
-
-// destory specific executor
-void uthread_exec_destroy(uthread_executor_t *exec);
-
-// causes the calling uthread to yield execution to another uthread that is
-// ready to run on the current executor
-void uthread_yield(uthread_t *handle);
-
-// causes the calling uthread to exit
-void uthread_exit(uthread_t *handle);
+enum uthread_error uthread_executor(struct uthread_executor_t *exec,
+                                    void *(*alloc)(size_t),
+                                    void (*dealloc)(void *));
+void uthread_executor_destroy(struct uthread_executor_t *exec);
+uthread_id_t uthread(struct uthread_executor_t *exec, void (*job)(void *),
+                     void *job_arg, enum uthread_error *err);
+enum uthread_error uthread_join(struct uthread_executor_t *exec);
+void uthread_yield();
+void uthread_exit();
+struct uthread_executor_t *uthread_current_executor();
+struct uthread_t *uthread_current_thread();
 
 #ifdef __cplusplus
 }

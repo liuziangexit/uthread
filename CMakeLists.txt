@@ -1,33 +1,26 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.1)
 project(uthread)
 ENABLE_LANGUAGE(C)
-
-#debug flags
-set(UTHREAD_DEBUG_FLAGS "-O0 -g -pg")
-
-#release flags
-set(UTHREAD_RELEASE_FLAGS "-O3")
 
 #options
 set(UTHREAD_STATIC_LINKING FALSE CACHE BOOL "Link libuthread statically")
 set(UTHREAD_OPTIMIZATION TRUE CACHE BOOL "Enable optimization")
+set(UTHREAD_DEBUG FALSE CACHE BOOL "Build with debug information")
 set(UTHREAD_ENABLE_HOOK TRUE CACHE BOOL "Enable system call hook")
-set(UTHREAD_HOOK_STDOUT FALSE CACHE BOOL "Write infomations into standard output while hooked functions has been called")
 
 #set C version: C11
-include(CheckCCompilerFlag)
-check_c_compiler_flag("-std=c11" COMPILER_SUPPORTS_C11)
-if(COMPILER_SUPPORTS_C11)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
+
+#set optimization flags
+if(UTHREAD_OPTIMIZATION)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
 else()
-message(STATUS "The compiler ${CMAKE_C_COMPILER} has no C11 support.")    
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
 endif()
 
-#set debug or release flags
-if(UTHREAD_OPTIMIZATION)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${UTHREAD_RELEASE_FLAGS}")
-else()
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${UTHREAD_DEBUG_FLAGS}")
+#debug flags
+if(UTHREAD_DEBUG)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -pg")
 endif()
 
 #set warning level: enable all warning
@@ -50,22 +43,53 @@ else()
     add_library(uthread SHARED src/uthread.c)
     set_target_properties(uthread PROPERTIES LIBRARY_OUTPUT_DIRECTORY build/lib)
 endif()
+if(UTHREAD_DEBUG)
+    target_compile_definitions(uthread PRIVATE UTHREAD_DEBUG)
+else()
+    target_compile_definitions(uthread PRIVATE NDEBUG)
+endif()
+target_link_libraries(uthread pthread)
 
 #build uthread_hook
 add_library(uthread_hook SHARED src/uthread_hook.c)
-if(UTHREAD_HOOK_STDOUT)
-    target_compile_definitions(uthread_hook PRIVATE HOOK_STDOUT)
+if(UTHREAD_DEBUG)
+    target_compile_definitions(uthread_hook PRIVATE UTHREAD_DEBUG)
+else()
+    target_compile_definitions(uthread_hook PRIVATE NDEBUG)
 endif()
 target_link_libraries(uthread_hook dl)
 set_target_properties(uthread_hook PROPERTIES LIBRARY_OUTPUT_DIRECTORY build/lib)
 
 #build test
+add_executable(test_vector test/vector.c)
+if(UTHREAD_DEBUG)
+    target_compile_definitions(test_vector PRIVATE UTHREAD_DEBUG)
+else()
+    target_compile_definitions(test_vector PRIVATE NDEBUG)
+endif()
+set_target_properties(test_vector PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
+
 add_executable(test_yield test/yield.c)
+if(UTHREAD_DEBUG)
+    target_compile_definitions(test_yield PRIVATE UTHREAD_DEBUG)
+else()
+    target_compile_definitions(test_yield PRIVATE NDEBUG)
+endif()
 target_link_libraries(test_yield uthread)
 set_target_properties(test_yield PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
 
-add_executable(test_hook test/hook.c)
-if(UTHREAD_ENABLE_HOOK)
-    target_link_libraries(test_hook uthread_hook)
+add_executable(test_create test/create.c)
+if(UTHREAD_DEBUG)
+    target_compile_definitions(test_create PRIVATE UTHREAD_DEBUG)
+else()
+    target_compile_definitions(test_create PRIVATE NDEBUG)
 endif()
-set_target_properties(test_hook PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
+target_link_libraries(test_create uthread)
+set_target_properties(test_create PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
+
+add_executable(test_tcp test/tcp.c)
+if(UTHREAD_ENABLE_HOOK)
+    target_link_libraries(test_tcp uthread_hook)
+    target_link_libraries(test_tcp uthread)
+endif()
+set_target_properties(test_tcp PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
