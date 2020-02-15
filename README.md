@@ -1,11 +1,11 @@
 # uthread
 [![Build Status](https://github.com/liuziangexit/uthread/workflows/build/badge.svg)](https://github.com/liuziangexit/uthread/actions)
 <br>
-Cross-platform implementation of user-space thread(As known as coroutine).
+Cross-platform implementation of User-space thread(As known as coroutine).
 <br>
 跨平台的用户态线程实现(也称作协程)。
 <h2>Features / 功能</h2>
--Context switch / 上下文切换
+-Context switch in User-space / 在用户态上下文切换
 <br>
 -Automatic switch to other uthread while blocking on IO system call / 阻塞于IO系统调用时自动切换到其他uthread
 <br>
