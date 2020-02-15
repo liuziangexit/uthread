@@ -72,8 +72,10 @@ struct uthread_t *uimpl_threadp(struct uthread_executor_t *exec,
 
 bool uimpl_switch_to(struct uthread_executor_t *exec, struct uthread_t *thread,
                      enum uthread_state prev_state) {
-  // log支持格式化字符串
+// log支持格式化字符串
+#ifdef UTHREAD_DEBUG
   fprintf(stdout, "switch from %zu to %zu\n", exec->current_thread, thread->id);
+#endif
   UTHREAD_CHECK(thread->exec == exec, "uimpl_switch_to check failed");
   if (exec->current_thread == thread->id) {
     return true;

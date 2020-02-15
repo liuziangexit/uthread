@@ -11,28 +11,38 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-// TODO 支持在uthread中创建uthread，支持自动扩容
+#define RECV_BUF_SIZE 128
 
-typedef struct {
+struct client_info {
   int fd;
   struct sockaddr_in addr;
-} client_info;
+};
 
 void server_work_thread(void *arg) {
-  client_info *client = (client_info *)arg;
-  printf("server handling new client\n");
-  /*
-  char buffer[256];
-  bzero(buffer, 256);
-  n = read(newsockfd, buffer, 255);
-  if (n < 0)
-    error("ERROR reading from socket");
-  printf("Here is the message: %s\n", buffer);
-  n = write(newsockfd, "I got your message", 18);
-  if (n < 0)
-    error("ERROR writing to socket");
-  return 0;
-  */
+  struct client_info *client = (struct client_info *)arg;
+  printf("server_work_thread go\n");
+  unsigned char buf[RECV_BUF_SIZE];
+  ssize_t numbytes = recv(client->fd, buf, RECV_BUF_SIZE, 0);
+  if (numbytes == -1) {
+    printf("server_work_thread recv failed\n");
+    free(client);
+    abort();
+  }
+  if (send(client->fd, buf, numbytes, 0) == -1) {
+    printf("server_work_thread send failed\n");
+    free(client);
+    abort();
+  }
+  if (numbytes > 5) {
+    buf[5] = '\0';
+  } else {
+    buf[numbytes] = '\0';
+  }
+  printf("server_work_thread recv: %s\n", buf);
+  close(client->fd);
+  free(client);
+  printf("server_work_thread exit\n");
+  uthread_exit();
 }
 
 void server(void *arg) {
@@ -58,23 +68,30 @@ void server(void *arg) {
   }
   struct sockaddr_in remote_addr;
   socklen_t remote_addr_len = sizeof(remote_addr);
-  while (1) {
-    printf("server begin accept\n");
+  int i = 3;
+  while (i--) {
+    printf("server begin accept(%d time left)\n", i);
     int client_fd =
         accept(server_fd, (struct sockaddr *)&remote_addr, &remote_addr_len);
     if (client_fd < 0) {
       printf("server accept failed\n");
       abort();
     }
-    printf("server end accept\n");
+    printf("server end accept(%d time left)\n", i);
 
-    // client_info *c = malloc(sizeof(client_info));
-    // c->fd = client_fd;
-    // memcpy(&c->addr, &remote_addr, remote_addr_len);
-    // uthread_error err;
-    // uthread_create(UTHREAD_CLS, &err, uthread_current(EXECUTOR_CLS),
-    //                server_work_thread, c);
+    struct client_info *c = malloc(sizeof(struct client_info));
+    c->fd = client_fd;
+    memcpy(&c->addr, &remote_addr, remote_addr_len);
+    enum uthread_error err;
+    uthread(uthread_current_executor(), server_work_thread, c, &err);
+    if (err != OK) {
+      printf("create server work thread failed\n");
+    } else {
+      printf("create server work thread OK\n");
+    }
   }
+  close(server_fd);
+  printf("server accept thread exit\n");
   uthread_exit();
 }
 
@@ -96,23 +113,25 @@ void client(void *arg) {
     abort();
   }
   printf("client end connect\n");
+  if (send(sockfd, "AAAA", 5, 0) == -1) {
+    printf("client send failed\n");
+    abort();
+  }
+  char buf[RECV_BUF_SIZE];
+  ssize_t numbytes = recv(sockfd, buf, RECV_BUF_SIZE, 0);
+  if (numbytes == -1) {
+    printf("client recv failed\n");
+    abort();
+  }
+  buf[numbytes] = '\0';
+  if (strcmp("AAAA", buf)) {
+    printf("client strcmp failed\n");
+    abort();
+  } else {
+    printf("client strcmp OK\n");
+  }
+  printf("client exit\n");
   close(sockfd);
-  // while (1) {
-  //   if (send(sockfd, "Hello, world!\n", 14, 0) == -1) {
-  //      abort();
-  //   }
-  //   printf("After the send function \n");
-
-  //   if ((numbytes = recv(sockfd, buf, MAXDATASIZE, 0)) == -1) {
-  //     perror("recv");
-  //     exit(1);
-  //   }
-
-  //   buf[numbytes] = '\0';
-
-  //   printf("Received in pid=%d, text=: %s \n", getpid(), buf);
-  //   sleep(1);
-  // }
   uthread_exit();
 }
 

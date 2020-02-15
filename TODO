@@ -1,5 +1,0 @@
-PENDING-重构，首先要支持uthread数组的自动扩容，那么就不能用指针来表示uthread了，必须用唯一id来表示uthread，一些api和内部实现需要修改
-PROC-完成剩下那些函数的hook版本
-OK-tcp demo改用uthread做并发
-PENDING-hook一下close，把fd从epoll里移除
-PENDING-更公平的调度算法（增加时间记录）

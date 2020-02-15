@@ -26,6 +26,7 @@
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #ifdef __cplusplus
@@ -65,9 +66,8 @@ static void uimpl_epoll_add(int epoll, struct uthread_t *handle, int fd,
                 "uimpl_epoll_add failed");
 }
 
-static void uimpl_epoll_del(int epoll, int fd) {
-  UTHREAD_CHECK(epoll_ctl(epoll, EPOLL_CTL_DEL, fd, 0) != -1,
-                "uimpl_epoll_add failed");
+static bool uimpl_epoll_del(int epoll, int fd) {
+  return epoll_ctl(epoll, EPOLL_CTL_DEL, fd, 0) != -1;
 }
 
 // return the previous option
@@ -129,7 +129,9 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
     uimpl_epoll_switch(exec->epoll, exec);
     // 4. when the control flow goes back, remove the socket from epoll
     // interest list
-    uimpl_epoll_del(exec->epoll, sockfd);
+    if (!uimpl_epoll_del(exec->epoll, sockfd)) {
+      UTHREAD_ABORT("uimpl_epoll_del failed");
+    }
     // 5. do accept
     return real(sockfd, addr, addrlen);
   }
@@ -168,7 +170,9 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
   uimpl_epoll_switch(exec->epoll, exec);
   // 6. when the control flow goes back, remove the socket from epoll interest
   // list
-  uimpl_epoll_del(exec->epoll, sockfd);
+  if (!uimpl_epoll_del(exec->epoll, sockfd)) {
+    UTHREAD_ABORT("uimpl_epoll_del failed");
+  }
   // 7. check whether the operation completed successfully
   int err;
   socklen_t errlen = sizeof(err);
@@ -186,44 +190,105 @@ int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
     return -1;
   }
 }
-/*
+
 ssize_t send(int sockfd, const void *buf, size_t len, int flags) {
-#ifdef UTHREAD_DEBUG
-  printf("send(%d, %" PRIxPTR ", %zu, %d)\n", sockfd, (uintptr_t)buf, len,
-         flags);
-#endif
-  uthread_executor_t *cur_exec = uthread_impl_current_exec();
-#ifdef UTHREAD_DEBUG
-  printf("cur_exec == %" PRIxPTR "\n", (uintptr_t)cur_exec);
-#endif
-  UTHREAD_CHECK(cur_exec, "send are not calling under uthread");
   typedef ssize_t (*send_t)(int, const void *, size_t, int);
   send_t real = (send_t)dlsym(RTLD_NEXT, "send");
-  return real(sockfd, buf, len, flags);
+  if (!real) {
+    UTHREAD_ABORT("retrieve system function send with dlsym failed");
+  }
+  struct uthread_executor_t *exec = uthread_current_executor();
+  if (!exec) {
+    // not calling from uthread
+    return real(sockfd, buf, len, flags);
+  }
+  // calling from uthread
+  // 1. create epoll for the current executor if it doesn't exist
+  UTHREAD_CHECK(uimpl_epoll_init(exec), "can not create epoll");
+  // 2. set the fd to non-block mode
+  bool nonblock = uimpl_set_nonblock(sockfd, true);
+  // 3. call non-blocking send
+  int ret = real(sockfd, buf, len, flags);
+  if (ret != -1) {
+    // send ok
+    return ret;
+  }
+  if (errno != EAGAIN && errno != EWOULDBLOCK) {
+    // something goes wrong
+    return -1;
+  }
+  // send operation are pending
+  // 4. add connecting socket into epoll's interest list
+  uimpl_epoll_add(exec->epoll, uimpl_threadp(exec, exec->current_thread),
+                  sockfd, EPOLLOUT);
+  // 5. switch to other uthread
+  uimpl_epoll_switch(exec->epoll, exec);
+  // 6. when the control flow goes back, remove the socket from epoll interest
+  // list
+  if (!uimpl_epoll_del(exec->epoll, sockfd)) {
+    UTHREAD_ABORT("uimpl_epoll_del failed");
+  }
+  // 7. recover the previous non-block option
+  if (!nonblock) {
+    uimpl_set_nonblock(sockfd, false);
+  }
+  // 8. return the number of bytes sent
+  return len;
 }
+
 ssize_t recv(int sockfd, void *buf, size_t len, int flags) {
-#ifdef UTHREAD_DEBUG
-  printf("recv(%d, %" PRIxPTR ", %zu, %d)\n", sockfd, (uintptr_t)buf, len,
-         flags);
-#endif
-  uthread_executor_t *cur_exec = uthread_impl_current_exec();
-#ifdef UTHREAD_DEBUG
-  printf("cur_exec == %" PRIxPTR "\n", (uintptr_t)cur_exec);
-#endif
-  UTHREAD_CHECK(cur_exec, "recv are not calling under uthread");
-  typedef ssize_t (*recv_t)(int, void *, size_t, int);
+  typedef ssize_t (*recv_t)(int sockfd, void *buf, size_t len, int flags);
   recv_t real = (recv_t)dlsym(RTLD_NEXT, "recv");
-  return real(sockfd, buf, len, flags);
+  if (!real) {
+    UTHREAD_ABORT("retrieve system function recv with dlsym failed");
+  }
+  struct uthread_executor_t *exec = uthread_current_executor();
+  if (!exec) {
+    // not calling from uthread
+    return real(sockfd, buf, len, flags);
+  }
+  // calling from uthread
+  int unread = 0;
+  UTHREAD_CHECK(ioctl(sockfd, FIONREAD, &unread) != -1, "ioctl failed");
+  if (unread > 0) {
+    // if there is unread bytes
+    return real(sockfd, buf, len, flags);
+  } else {
+    // 1. create epoll for the current executor if it doesn't exist
+    UTHREAD_CHECK(uimpl_epoll_init(exec), "can not create epoll");
+    // 2. add listening socket into epoll's interest list
+    uimpl_epoll_add(exec->epoll, uimpl_threadp(exec, exec->current_thread),
+                    sockfd, EPOLLIN);
+    // 3. switch to other uthread
+    uimpl_epoll_switch(exec->epoll, exec);
+    // 4. when the control flow goes back, remove the socket from epoll
+    // interest list
+    if (!uimpl_epoll_del(exec->epoll, sockfd)) {
+      UTHREAD_ABORT("uimpl_epoll_del failed");
+    }
+    // 5. do recv
+    return real(sockfd, buf, len, flags);
+  }
 }
+
 int close(int fd) {
-#ifdef UTHREAD_DEBUG
-  printf("close(%d)\n", fd);
-#endif
   typedef int (*close_t)(int);
   close_t real = (close_t)dlsym(RTLD_NEXT, "close");
+  struct uthread_executor_t *exec = uthread_current_executor();
+  if (!exec) {
+    // not calling from uthread
+    return real(fd);
+  }
+  // remove fd from epoll
+  if (exec->epoll >= 0 && fd != exec->epoll) {
+    if (!uimpl_epoll_del(exec->epoll, fd)) {
+      if (errno != ENOENT) {
+        UTHREAD_ABORT("close failed");
+      }
+    }
+  }
   return real(fd);
 }
-*/
 
 // END hook implementation
 
