@@ -60,7 +60,6 @@ static inline bool uimpl_has_flag(enum uthread_state state, int flag) {
 
 static void uimpl_wrapper() {
   struct uthread_t *thread = uimpl_current();
-  printf("uimpl_wrapper %zu\n", thread->id);
   thread->job(thread->job_arg);
   UTHREAD_ABORT("uthread quit without calling uthread_exit");
 }
@@ -212,7 +211,6 @@ uthread_id_t uthread(struct uthread_executor_t *exec, void (*job)(void *),
         ->context = 0;
     // vector internal storage has been realloced
     if (prev_data != exec->threads.data) {
-      printf("update triggered by vector resize\n");
       // we need to update current uthread pointer
       if (uimpl_current()) {
         uimpl_set_current(uimpl_threadp(exec, exec->current_thread));

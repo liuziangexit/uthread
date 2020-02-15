@@ -57,7 +57,6 @@ void uthread_vector_destroy(struct uthread_vector *vec) {
 }
 
 bool uthread_vector_reserve(struct uthread_vector *vec, size_t new_cap) {
-  printf("reserve from %zu to %zu\n", vec->capacity, new_cap);
   if (vec->capacity >= new_cap) {
     return true;
   }
