@@ -13,6 +13,11 @@
  * the License.
  */
 
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 8)
+#error "linux kernel before 2.6.8 is not supported"
+#endif
+
 #define _GNU_SOURCE
 #include <dlfcn.h> //for dlsym
 #undef _GNU_SOURCE
