@@ -20,12 +20,14 @@
 
 #include "../../include/uthread.h"
 #include "../common/log.h"
-#include "../common/vector.h"
+#include "../common/vector.c"
 #include <stdbool.h>
 #include <stdlib.h> // malloc
 #include <sys/epoll.h>
 #include <ucontext.h>
 #include <unistd.h> // close
+
+uthread_id_t UTHREAD_INVALID_ID = SIZE_MAX;
 
 // BEGIN tls store
 #include <pthread.h>
@@ -34,14 +36,14 @@ static pthread_key_t uthread_tls_key;
 static int uthread_tls_key_created = 0;
 
 static void uimpl_del_tls() {
-  if (pthread_key_delete(uthread_tls_key))
-    UTHREAD_ABORT("uimpl_del_tls failed");
+  // do nothing
 }
 static void uimpl_set_current(struct uthread_t *ut) {
   if (!uthread_tls_key_created) {
     if (pthread_key_create(&uthread_tls_key, uimpl_del_tls))
       UTHREAD_ABORT("uimpl_set_current failed");
     uthread_tls_key_created = 1;
+    UTHREAD_DEBUG_PRINT("TLS created\n");
   }
   if (pthread_setspecific(uthread_tls_key, (void *)ut))
     UTHREAD_ABORT("uimpl_set_current failed");
@@ -70,19 +72,16 @@ struct uthread_t *uimpl_threadp(struct uthread_executor_t *exec,
   return (struct uthread_t *)uthread_vector_get(&exec->threads, id);
 }
 
-bool uimpl_switch_to(struct uthread_executor_t *exec, struct uthread_t *thread,
-                     enum uthread_state prev_state) {
-// log支持格式化字符串
-#ifdef UTHREAD_DEBUG
-  fprintf(stdout, "switch from %zu to %zu\n", exec->current_thread, thread->id);
-#endif
-  UTHREAD_CHECK(thread->exec == exec, "uimpl_switch_to check failed");
+bool uimpl_switch_to(struct uthread_executor_t *exec,
+                     struct uthread_t *thread) {
+  UTHREAD_DEBUG_PRINT("switch from %zu to %zu\n", exec->current_thread,
+                      thread->id);
+  UTHREAD_CHECK(thread->exec == exec, "uimpl_switch_to failed");
   if (exec->current_thread == thread->id) {
     return true;
   }
   if (exec->current_thread != UTHREAD_INVALID_ID) {
     struct uthread_t *prev = uimpl_threadp(exec, exec->current_thread);
-    prev->state = prev_state;
     thread->state = RUNNING;
     exec->current_thread = thread->id;
     uimpl_set_current(thread);
@@ -256,7 +255,7 @@ uthread_id_t uthread(struct uthread_executor_t *exec, void (*job)(void *),
 
 enum uthread_error uthread_join(struct uthread_executor_t *exec) {
   if (exec->schedulable_cnt > 0) {
-    if (!uimpl_switch_to(exec, uimpl_threadp(exec, 0), 0)) {
+    if (!uimpl_switch_to(exec, uimpl_threadp(exec, 0))) {
       return SYSTEM_CALL_FAILED;
     }
   }
@@ -264,17 +263,21 @@ enum uthread_error uthread_join(struct uthread_executor_t *exec) {
 }
 
 void uthread_yield() {
-  struct uthread_executor_t *exec = uthread_current_executor();
+  struct uthread_t *t = uimpl_current();
+  struct uthread_executor_t *exec = t->exec;
+  t->state = YIELDED;
   struct uthread_t *next = uimpl_next(exec, true);
   UTHREAD_CHECK(next, "uthread_yield failed");
-  if (!uimpl_switch_to(exec, next, YIELDED))
+  if (!uimpl_switch_to(exec, next))
     UTHREAD_ABORT("uthread_yield failed");
 }
 
 void uthread_exit() {
-  struct uthread_executor_t *exec = uthread_current_executor();
+  struct uthread_t *u = uimpl_current();
+  struct uthread_executor_t *exec = u->exec;
+  u->state = STOPPED;
+  UTHREAD_DEBUG_PRINT("uthread %zu quitting\n", exec->current_thread);
   if (exec->schedulable_cnt == 1) {
-    uimpl_threadp(exec, exec->current_thread)->state = STOPPED;
     exec->schedulable_cnt--;
     uimpl_set_current(0);
     setcontext(&exec->join_ctx->uctx);
@@ -282,7 +285,7 @@ void uthread_exit() {
     struct uthread_t *next = uimpl_next(exec, false);
     UTHREAD_CHECK(next, "uthread_exit failed");
     exec->schedulable_cnt--;
-    uimpl_switch_to(exec, next, STOPPED);
+    uimpl_switch_to(exec, next);
     UTHREAD_ABORT("illegal state");
   }
 }

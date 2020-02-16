@@ -18,24 +18,16 @@
 #include "log.h"
 #include <stdlib.h> //abort
 
-/*
-注意，在这里不使用stderr的原因是，stderr是所谓“unbuffered”模式的，
-对这种模式的stream进行输出最终会调用到glibc中的buffered_vfprintf函数，
-这个函数会在栈上开辟8192字节的空间，而目前我们uthread的栈空间是4k，因此会导致栈溢出
-
-出于这样的考虑，我们使用stdout
- */
-
 #define UTHREAD_ABORT(msg)                                                     \
   {                                                                            \
-    uthread_fault(stdout, msg);                                                \
+    UTHREAD_DEBUG_PRINT(msg);                                                  \
     abort();                                                                   \
   }
 
 #ifdef UTHREAD_DEBUG
 #define UTHREAD_CHECK(v, msg)                                                  \
   if (!(v)) {                                                                  \
-    uthread_fault(stdout, msg);                                                \
+    UTHREAD_DEBUG_PRINT(msg);                                                  \
     abort();                                                                   \
   }
 #else

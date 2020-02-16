@@ -18,7 +18,7 @@
 #undef _GNU_SOURCE
 #include "../../include/uthread.h"
 #include "../common/assert_helper.h"
-#include "../common/vector.h"
+#include "../common/vector.c"
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
@@ -34,8 +34,7 @@ extern "C" {
 #endif
 
 // BEGIN internal functions
-bool uimpl_switch_to(struct uthread_executor_t *exec, struct uthread_t *thread,
-                     enum uthread_state prev_state);
+bool uimpl_switch_to(struct uthread_executor_t *exec, struct uthread_t *thread);
 struct uthread_t *uimpl_next(struct uthread_executor_t *exec, bool allow_back);
 struct uthread_t *uimpl_threadp(struct uthread_executor_t *exec,
                                 uthread_id_t id);
@@ -44,9 +43,11 @@ static bool uimpl_epoll_init(struct uthread_executor_t *exec) {
   if (exec->epoll < 0) {
     int new_epoll = epoll_create(1);
     if (new_epoll < 0) {
+      UTHREAD_DEBUG_PRINT("create epoll failed\n");
       return false;
     }
     exec->epoll = new_epoll;
+    UTHREAD_DEBUG_PRINT("create epoll succeeded\n");
   }
   return true;
 }
@@ -89,7 +90,7 @@ static void uimpl_epoll_switch(int epoll, struct uthread_executor_t *exec) {
   current->state = WAITING_IO;
   struct uthread_t *next = uimpl_next(exec, false);
   UTHREAD_CHECK(next, "uimpl_epoll_switch failed");
-  uimpl_switch_to(exec, next, WAITING_IO);
+  uimpl_switch_to(exec, next);
 }
 // END internal functions
 

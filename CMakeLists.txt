@@ -6,7 +6,6 @@ ENABLE_LANGUAGE(C)
 set(UTHREAD_STATIC_LINKING FALSE CACHE BOOL "Link libuthread statically")
 set(UTHREAD_OPTIMIZATION TRUE CACHE BOOL "Enable optimization")
 set(UTHREAD_DEBUG FALSE CACHE BOOL "Build with debug information")
-set(UTHREAD_ENABLE_HOOK TRUE CACHE BOOL "Enable system call hook")
 
 #set C version: C11
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
@@ -88,8 +87,6 @@ target_link_libraries(test_create uthread)
 set_target_properties(test_create PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
 
 add_executable(test_tcp test/tcp.c)
-if(UTHREAD_ENABLE_HOOK)
-    target_link_libraries(test_tcp uthread_hook)
-    target_link_libraries(test_tcp uthread)
-endif()
+target_link_libraries(test_tcp uthread)
+target_link_libraries(test_tcp uthread_hook)
 set_target_properties(test_tcp PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)

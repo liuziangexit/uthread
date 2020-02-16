@@ -41,7 +41,7 @@ struct uthread_t;
 #include <stdint.h> // SIZE_MAX
 #include <ucontext.h>
 typedef size_t uthread_id_t;
-uthread_id_t UTHREAD_INVALID_ID = SIZE_MAX;
+extern uthread_id_t UTHREAD_INVALID_ID;
 struct uthread_executor_t {
   struct uthread_vector threads;
   struct uthread_linux_context_t *join_ctx;

@@ -15,31 +15,26 @@
 
 #ifndef __UTHREAD_LOG_H__
 #define __UTHREAD_LOG_H__
+#include <stdarg.h>
 #include <stdio.h>
 
-// TODO
-// 支持传格式化字符串和参数进来，并且目前似乎文件和行数显示的都不对，只能用宏了
+/*
+注意，在这里不使用stderr的原因是，stderr是所谓“unbuffered”模式的，
+对这种模式的stream进行输出最终会调用到glibc中的buffered_vfprintf函数，
+这个函数会在栈上开辟8192字节的空间，而目前我们uthread的栈空间是4k，因此会导致栈溢出
 
-void uthread_info(FILE *fp, const char *msg) {
+出于这样的考虑，我们使用stdout
+ */
+
 #ifdef UTHREAD_DEBUG
-  fprintf(fp, "[info]%s:%d: %s\n", __FILE__, __LINE__, msg);
+#define UTHREAD_DEBUG_PRINT(fmt, ...)                                          \
+  do {                                                                         \
+    fprintf(stdout, "%s - line %d:  " fmt, __FILE__, __LINE__, ##__VA_ARGS__); \
+  } while (0)
+#else
+#define UTHREAD_DEBUG_PRINT(fmt, ...)                                          \
+  do {                                                                         \
+  } while (0)
 #endif
-}
-
-void uthread_warn(FILE *fp, const char *msg) {
-#ifdef UTHREAD_DEBUG
-  fprintf(fp, "[warn]%s:%d: %s\n", __FILE__, __LINE__, msg);
-#endif
-}
-
-void uthread_error(FILE *fp, const char *msg) {
-#ifdef UTHREAD_DEBUG
-  fprintf(fp, "[error]%s:%d: %s\n", __FILE__, __LINE__, msg);
-#endif
-}
-
-void uthread_fault(FILE *fp, const char *msg) {
-  fprintf(fp, "[fault]%s:%d: %s\n", __FILE__, __LINE__, msg);
-}
 
 #endif
