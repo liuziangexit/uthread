@@ -62,13 +62,18 @@ target_link_libraries(uthread_hook dl)
 set_target_properties(uthread_hook PROPERTIES LIBRARY_OUTPUT_DIRECTORY build/lib)
 
 #build test
-add_executable(test_vector test/vector.c)
-if(UTHREAD_DEBUG)
-    target_compile_definitions(test_vector PRIVATE UTHREAD_DEBUG)
-else()
-    target_compile_definitions(test_vector PRIVATE NDEBUG)
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+
+    add_executable(test_vector test/vector.c)
+    if(UTHREAD_DEBUG)
+        target_compile_definitions(test_vector PRIVATE UTHREAD_DEBUG)
+    else()
+        target_compile_definitions(test_vector PRIVATE NDEBUG)
+    endif()
+    set_target_properties(test_vector PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
+
 endif()
-set_target_properties(test_vector PROPERTIES RUNTIME_OUTPUT_DIRECTORY build/test)
 
 add_executable(test_yield test/yield.c)
 if(UTHREAD_DEBUG)
