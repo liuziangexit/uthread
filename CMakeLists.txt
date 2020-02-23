@@ -6,7 +6,7 @@ set(UTHREAD_STATIC_LINKING FALSE CACHE BOOL "Link libuthread statically")
 set(UTHREAD_OPTIMIZATION TRUE CACHE BOOL "Enable optimization")
 set(UTHREAD_DEBUG FALSE CACHE BOOL "Build with debug information")
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+if(UNIX AND NOT APPLE)
     enable_language(C)
     #set C version: C11
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
@@ -25,7 +25,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang"
 
     #set warning level: enable all warning
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
-elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
+elseif (WIN32)
     enable_language(CXX)
     set(CMAKE_CXX_STANDARD 11)
     set(CMAKE_CXX_EXTENSIONS OFF)
@@ -49,7 +49,9 @@ if(UTHREAD_DEBUG)
 else()
     target_compile_definitions(uthread PRIVATE NDEBUG)
 endif()
-target_link_libraries(uthread pthread)
+if(UNIX)
+    target_link_libraries(uthread pthread)
+endif()
 
 #build uthread_hook
 add_library(uthread_hook SHARED src/uthread_hook.c)
@@ -58,12 +60,14 @@ if(UTHREAD_DEBUG)
 else()
     target_compile_definitions(uthread_hook PRIVATE NDEBUG)
 endif()
-target_link_libraries(uthread_hook dl)
+if(UNIX AND NOT APPLE)
+    target_link_libraries(uthread_hook dl)
+endif()
 set_target_properties(uthread_hook PROPERTIES LIBRARY_OUTPUT_DIRECTORY build/lib)
 
 #build test
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+if(UNIX AND NOT APPLE)
 
     add_executable(test_vector test/vector.c)
     if(UTHREAD_DEBUG)
