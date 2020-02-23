@@ -1,33 +1,35 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.3.2)
 project(uthread)
-ENABLE_LANGUAGE(C)
 
 #options
 set(UTHREAD_STATIC_LINKING FALSE CACHE BOOL "Link libuthread statically")
 set(UTHREAD_OPTIMIZATION TRUE CACHE BOOL "Enable optimization")
 set(UTHREAD_DEBUG FALSE CACHE BOOL "Build with debug information")
 
-#set C version: C11
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    enable_language(C)
+    #set C version: C11
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
 
-#set optimization flags
-if(UTHREAD_OPTIMIZATION)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
-else()
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
-endif()
+    #set optimization flags
+    if(UTHREAD_OPTIMIZATION)
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
+    else()
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
+    endif()
 
-#debug flags
-if(UTHREAD_DEBUG)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -pg")
-endif()
+    #debug flags
+    if(UTHREAD_DEBUG)
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -pg")
+    endif()
 
-#set warning level: enable all warning
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
-
-#disable MSVC language extensions
-if ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /Za")
+    #set warning level: enable all warning
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "MSVC")
+    enable_language(CXX)
+    set(CMAKE_CXX_STANDARD 11)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Wall")
 endif()
 
 message(STATUS "System            : ${CMAKE_SYSTEM_NAME}")
